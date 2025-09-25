@@ -44,6 +44,7 @@ ENV/
 build/
 dist/
 *.spec
+*.crx
 
 # Testing
 .coverage
@@ -58,3 +59,10 @@ htmlcov/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Large files
+deployment/extension/crx/FocusGuard_v1.0.0.crx
+UNUSED/archive/core/browser_detection/webextension_mv2/webextension_mv2.crx
+
+# Test reports
+test_reports/
