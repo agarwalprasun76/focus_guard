@@ -1,0 +1,64 @@
+{
+  "suite_name": "Focus Guard Integration Test Suite",
+  "start_time": "2025-09-08T17:34:21.602054",
+  "end_time": "2025-09-08T17:34:32.259952",
+  "total_duration": 10.657898,
+  "total_tests": 4,
+  "passed_tests": 0,
+  "failed_tests": 4,
+  "skipped_tests": 0,
+  "error_tests": 0,
+  "test_results": [
+    {
+      "test_name": "py_module",
+      "module": "focus_guard/tests/integration/test_tab_blocking_pipeline.py",
+      "status": "failed",
+      "duration": 4.801122426986694,
+      "error_message": "Exit code: 1",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:34:26.485385"
+    },
+    {
+      "test_name": "py_module",
+      "module": "focus_guard/tests/integration/test_browser_extension_integration.py",
+      "status": "failed",
+      "duration": 1.7069122791290283,
+      "error_message": "Exit code: 2",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:34:28.192458"
+    },
+    {
+      "test_name": "py_module",
+      "module": "focus_guard/tests/integration/test_error_scenarios.py",
+      "status": "failed",
+      "duration": 1.5514378547668457,
+      "error_message": "Exit code: 2",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:34:29.744087"
+    },
+    {
+      "test_name": "py_module",
+      "module": "focus_guard/tests/integration/test_component_interactions.py",
+      "status": "failed",
+      "duration": 2.5155344009399414,
+      "error_message": "Exit code: 1",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:34:32.259768"
+    }
+  ],
+  "system_info": {
+    "platform": "Windows-11-10.0.26100-SP0",
+    "python_version": "3.13.3",
+    "cpu_count": 16,
+    "memory_total": 65314537472,
+    "memory_available": 39325315072,
+    "disk_usage": {
+      "total": 999032877056,
+      "used": 686856298496,
+      "free": 312176578560
+    },
+    "timestamp": "2025-09-08T17:34:21.682982",
+    "focus_guard_version": "unknown"
+  },
+  "coverage_info": null
+}

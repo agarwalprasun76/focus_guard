@@ -1,0 +1,30 @@
+{
+  "classification": {
+    "cache": {
+      "memory_ttl": 3600,
+      "disk_ttl": 86400,
+      "max_memory_size": 1000,
+      "max_disk_size": 10000,
+      "refresh_interval": 300,
+      "enable_background_refresh": true
+    },
+    "background": {
+      "refresh_interval": 300,
+      "warmup_batch_size": 10,
+      "warmup_delay": 0.5
+    },
+    "warmup_on_start": true,
+    "performance_log_interval": 1800,
+    "cache_cleanup_interval_seconds": 300
+  },
+  "cache_directories": {
+    "classification": "${FOCUS_GUARD_CACHE_DIR}/classification",
+    "youtube": "${FOCUS_GUARD_CACHE_DIR}/youtube",
+    "domains": "${FOCUS_GUARD_CACHE_DIR}/domains"
+  },
+  "performance_targets": {
+    "cache_hit_rate_threshold": 0.8,
+    "fast_response_rate_threshold": 0.9,
+    "max_avg_response_time_ms": 500
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "extension": {
+    "id": "hmjfbkppeejdnekjapejicmfhfogocjo",
+    "name": "Focus Guard",
+    "version": "1.0.0",
+    "manifest_version": 3
+  },
+  "deployment": {
+    "crx_filename": "FocusGuard_v1.0.0.crx",
+    "updates_xml": "updates.xml",
+    "source_path": "../focus_guard/core/browser/extension/webextension_mv3",
+    "build_output": "./crx/"
+  },
+  "enterprise": {
+    "policy_key": "ExtensionInstallForcelist",
+    "registry_paths": {
+      "machine": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist",
+      "user": "HKCU\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist"
+    }
+  },
+  "urls": {
+    "crx_placeholder": "https://your-domain.com/focusguard/FocusGuard.crx",
+    "updates_placeholder": "https://your-domain.com/focusguard/updates.xml"
+  }
+}

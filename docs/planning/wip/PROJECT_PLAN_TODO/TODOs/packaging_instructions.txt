@@ -1,0 +1,35 @@
+Prompt for Windsurf
+I have a Python project called Focus Guard. I want to create a Windows .exe using PyInstaller.
+Please follow these steps:
+
+Create a virtual environment and install all dependencies from requirements.txt.
+
+Make sure the main entry point is scripts/start_focus_guard.py, and that it has a main() function with if __name__ == "__main__": main().
+
+Use PyInstaller to package it into a single .exe using:
+
+nginx
+Copy
+Edit
+pyinstaller --onefile --noconfirm ^
+  --name FocusGuard ^
+  --add-data "config/default_config.yaml;config" ^
+  --icon=assets/icon.ico ^
+  scripts/start_focus_guard.py
+Make sure the config file is accessed using:
+
+python
+Copy
+Edit
+from platformdirs import user_config_dir
+Confirm that the output FocusGuard.exe works, reads config from %APPDATA%\FocusGuard\, and can be zipped and shared with users.
+
+Package the Focus Guard Python application into a single .exe file that:
+
+Runs on Windows
+
+Can be distributed and run by non-technical users
+
+Has a user-editable configuration file
+
+Optionally includes an icon and version info

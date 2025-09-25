@@ -1,0 +1,64 @@
+{
+  "suite_name": "Focus Guard Integration Test Suite",
+  "start_time": "2025-09-08T17:36:58.447028",
+  "end_time": "2025-09-08T17:37:01.486952",
+  "total_duration": 3.039924,
+  "total_tests": 4,
+  "passed_tests": 0,
+  "failed_tests": 2,
+  "skipped_tests": 0,
+  "error_tests": 2,
+  "test_results": [
+    {
+      "test_name": "test_tab_blocking_pipeline",
+      "module": "focus_guard/tests/integration/test_tab_blocking_pipeline.py",
+      "status": "failed",
+      "duration": 2.1026451587677,
+      "error_message": "Some tests failed",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:37:00.666903"
+    },
+    {
+      "test_name": "test_browser_extension_integration",
+      "module": "focus_guard/tests/integration/test_browser_extension_integration.py",
+      "status": "error",
+      "duration": 0.11846423149108887,
+      "error_message": "Test execution interrupted or error occurred",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:37:00.785501"
+    },
+    {
+      "test_name": "test_error_scenarios",
+      "module": "focus_guard/tests/integration/test_error_scenarios.py",
+      "status": "error",
+      "duration": 0.18864202499389648,
+      "error_message": "Test execution interrupted or error occurred",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:37:00.974278"
+    },
+    {
+      "test_name": "test_component_interactions",
+      "module": "focus_guard/tests/integration/test_component_interactions.py",
+      "status": "failed",
+      "duration": 0.5123803615570068,
+      "error_message": "Some tests failed",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:37:01.486848"
+    }
+  ],
+  "system_info": {
+    "platform": "Windows-11-10.0.26100-SP0",
+    "python_version": "3.13.3",
+    "cpu_count": 16,
+    "memory_total": 65314537472,
+    "memory_available": 39625662464,
+    "disk_usage": {
+      "total": 999032877056,
+      "used": 686814916608,
+      "free": 312217960448
+    },
+    "timestamp": "2025-09-08T17:36:58.563004",
+    "focus_guard_version": "unknown"
+  },
+  "coverage_info": null
+}

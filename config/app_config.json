@@ -1,0 +1,34 @@
+{
+  "smtp_defaults": {
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_username": "focusguardapp@gmail.com",
+    "use_tls": true,
+    "from_name": "FocusGuard App"
+  },
+  "data_directory": "",
+  "log_level": "INFO",
+  "default_check_interval": 10,
+  "default_session_duration": 3600,
+  "distraction_categories": {
+    "social_media": [
+      "facebook.com",
+      "twitter.com",
+      "instagram.com",
+      "tiktok.com",
+      "snapchat.com"
+    ],
+    "games": [
+      "steam.exe",
+      "epicgameslauncher.exe",
+      "robloxplayer.exe",
+      "minecraft.exe"
+    ],
+    "video_streaming": [
+      "netflix.com",
+      "hulu.com",
+      "disney+",
+      "twitch.tv"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+[server]
+# Disable file watching to prevent torch._classes errors
+runOnSave = false
+
+# Exclude torch directories from file watching
+folderWatchBlacklist = ["C:\\Users\\prasun_agarwal\\AppData\\Roaming\\Python\\Python313\\site-packages\\torch"]
+
+[logger]
+# Set log level to reduce noise
+level = "warning"

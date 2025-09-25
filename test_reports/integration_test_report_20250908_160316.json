@@ -1,0 +1,55 @@
+{
+  "suite_name": "Focus Guard Integration Test Suite",
+  "start_time": "2025-09-08T16:03:15.639939",
+  "end_time": "2025-09-08T16:03:16.573042",
+  "total_duration": 0.933103,
+  "total_tests": 4,
+  "passed_tests": 0,
+  "failed_tests": 4,
+  "skipped_tests": 0,
+  "error_tests": 0,
+  "test_results": [
+    {
+      "test_name": "focus_guard.tests.integration.test_tab_blocking_pipeline_fallback",
+      "module": "focus_guard.tests.integration.test_tab_blocking_pipeline",
+      "status": "failed",
+      "duration": 0.5191078186035156,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T16:03:16.275527"
+    },
+    {
+      "test_name": "focus_guard.tests.integration.test_browser_extension_integration_fallback",
+      "module": "focus_guard.tests.integration.test_browser_extension_integration",
+      "status": "failed",
+      "duration": 0.09918618202209473,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T16:03:16.375626"
+    },
+    {
+      "test_name": "focus_guard.tests.integration.test_error_scenarios_fallback",
+      "module": "focus_guard.tests.integration.test_error_scenarios",
+      "status": "failed",
+      "duration": 0.09416723251342773,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T16:03:16.470388"
+    },
+    {
+      "test_name": "focus_guard.tests.integration.test_component_interactions_fallback",
+      "module": "focus_guard.tests.integration.test_component_interactions",
+      "status": "failed",
+      "duration": 0.10163259506225586,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T16:03:16.572574"
+    }
+  ],
+  "system_info": {
+    "platform": "Windows-11-10.0.26100-SP0",
+    "python_version": "3.13.3",
+    "error": "cannot convert dictionary update sequence element #0 to a sequence"
+  },
+  "coverage_info": null
+}

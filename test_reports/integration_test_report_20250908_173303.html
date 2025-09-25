@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Focus Guard Integration Test Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background-color: #f0f0f0; padding: 20px; border-radius: 5px; }
+        .summary { display: flex; gap: 20px; margin: 20px 0; }
+        .metric { background-color: #e8f4fd; padding: 15px; border-radius: 5px; text-align: center; }
+        .metric.passed { background-color: #d4edda; }
+        .metric.failed { background-color: #f8d7da; }
+        .metric.skipped { background-color: #fff3cd; }
+        .test-results { margin-top: 20px; }
+        .test-item { border: 1px solid #ddd; margin: 5px 0; padding: 10px; border-radius: 3px; }
+        .test-item.passed { border-left: 5px solid #28a745; }
+        .test-item.failed { border-left: 5px solid #dc3545; }
+        .test-item.skipped { border-left: 5px solid #ffc107; }
+        .test-item.error { border-left: 5px solid #6f42c1; }
+        .error-details { background-color: #f8f9fa; padding: 10px; margin-top: 10px; font-family: monospace; font-size: 12px; }
+        .system-info { background-color: #f8f9fa; padding: 15px; margin-top: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Focus Guard Integration Test Report</h1>
+        <p>Generated: 2025-09-08T17:33:03.636392</p>
+        <p>Duration: 0.84 seconds</p>
+    </div>
+    
+    <div class="summary">
+        <div class="metric">
+            <h3>Total Tests</h3>
+            <div style="font-size: 24px; font-weight: bold;">4</div>
+        </div>
+        <div class="metric passed">
+            <h3>Passed</h3>
+            <div style="font-size: 24px; font-weight: bold;">0</div>
+        </div>
+        <div class="metric failed">
+            <h3>Failed</h3>
+            <div style="font-size: 24px; font-weight: bold;">4</div>
+        </div>
+        <div class="metric skipped">
+            <h3>Skipped</h3>
+            <div style="font-size: 24px; font-weight: bold;">0</div>
+        </div>
+    </div>
+    
+    <div class="test-results">
+        <h2>Test Results</h2>
+        
+            <div class="test-item failed">
+                <strong>test_tab_blocking_pipeline_module</strong> (focus_guard.tests.integration.test_tab_blocking_pipeline)
+                <span style="float: right;">0.380s</span>
+                <div>Status: FAILED</div>
+                <div class="error-details">Exit code: 4</div>
+            </div>
+            
+            <div class="test-item failed">
+                <strong>test_browser_extension_integration_module</strong> (focus_guard.tests.integration.test_browser_extension_integration)
+                <span style="float: right;">0.111s</span>
+                <div>Status: FAILED</div>
+                <div class="error-details">Exit code: 4</div>
+            </div>
+            
+            <div class="test-item failed">
+                <strong>test_error_scenarios_module</strong> (focus_guard.tests.integration.test_error_scenarios)
+                <span style="float: right;">0.113s</span>
+                <div>Status: FAILED</div>
+                <div class="error-details">Exit code: 4</div>
+            </div>
+            
+            <div class="test-item failed">
+                <strong>test_component_interactions_module</strong> (focus_guard.tests.integration.test_component_interactions)
+                <span style="float: right;">0.113s</span>
+                <div>Status: FAILED</div>
+                <div class="error-details">Exit code: 4</div>
+            </div>
+            
+    </div>
+    
+    <div class="system-info">
+        <h2>System Information</h2>
+        <pre>{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "python_version": "3.13.3",
+  "cpu_count": 16,
+  "memory_total": 65314537472,
+  "memory_available": 39706116096,
+  "disk_usage": {
+    "total": 999032877056,
+    "used": 686855720960,
+    "free": 312177156096
+  },
+  "timestamp": "2025-09-08T17:33:02.914133",
+  "focus_guard_version": "unknown"
+}</pre>
+    </div>
+</body>
+</html>

@@ -1,0 +1,64 @@
+{
+  "suite_name": "Focus Guard Integration Test Suite",
+  "start_time": "2025-09-08T17:33:02.794325",
+  "end_time": "2025-09-08T17:33:03.636392",
+  "total_duration": 0.842067,
+  "total_tests": 4,
+  "passed_tests": 0,
+  "failed_tests": 4,
+  "skipped_tests": 0,
+  "error_tests": 0,
+  "test_results": [
+    {
+      "test_name": "test_tab_blocking_pipeline_module",
+      "module": "focus_guard.tests.integration.test_tab_blocking_pipeline",
+      "status": "failed",
+      "duration": 0.3801710605621338,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:33:03.296011"
+    },
+    {
+      "test_name": "test_browser_extension_integration_module",
+      "module": "focus_guard.tests.integration.test_browser_extension_integration",
+      "status": "failed",
+      "duration": 0.11142921447753906,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:33:03.408336"
+    },
+    {
+      "test_name": "test_error_scenarios_module",
+      "module": "focus_guard.tests.integration.test_error_scenarios",
+      "status": "failed",
+      "duration": 0.11326742172241211,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:33:03.522166"
+    },
+    {
+      "test_name": "test_component_interactions_module",
+      "module": "focus_guard.tests.integration.test_component_interactions",
+      "status": "failed",
+      "duration": 0.11334824562072754,
+      "error_message": "Exit code: 4",
+      "error_traceback": null,
+      "timestamp": "2025-09-08T17:33:03.636051"
+    }
+  ],
+  "system_info": {
+    "platform": "Windows-11-10.0.26100-SP0",
+    "python_version": "3.13.3",
+    "cpu_count": 16,
+    "memory_total": 65314537472,
+    "memory_available": 39706116096,
+    "disk_usage": {
+      "total": 999032877056,
+      "used": 686855720960,
+      "free": 312177156096
+    },
+    "timestamp": "2025-09-08T17:33:02.914133",
+    "focus_guard_version": "unknown"
+  },
+  "coverage_info": null
+}

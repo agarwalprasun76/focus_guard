@@ -1,0 +1,685 @@
+"""
+Tab Server for browser extension communication.
+
+This module provides a lightweight HTTP server for communicating with browser extensions.
+It handles tab data updates, commands, and status checks.
+"""
+
+import json
+import time
+import socket
+import logging
+import threading
+import urllib.parse
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from typing import Dict, Any, Optional, Type, Callable, List, Union
+
+from focus_guard.core.config.interfaces import ConfigurationManager
+from focus_guard.core.browser.models.tab import Tab
+from focus_guard.core.browser.extension.interfaces import TabServerInterface, TabServerConfig
+
+logger = logging.getLogger(__name__)
+
+# Singleton instance
+_tab_server_instance = None
+
+class TabServer(TabServerInterface):
+    """
+    Manages an HTTP server for receiving browser tab data and sending commands to browser extensions.
+    
+    This server provides endpoints for:
+    - Receiving tab data from browser extensions
+    - Sending commands to browser extensions
+    - Checking extension connection status
+    - Getting tab data and active tab information
+    
+    The server uses a ThreadingHTTPServer to handle multiple concurrent requests.
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls, config: Optional[TabServerConfig] = None):
+        """Singleton pattern implementation."""
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self, config: Optional[TabServerConfig] = None):
+        """
+        Initialize the tab server.
+        
+        Args:
+            config: Configuration for the tab server
+        """
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+            
+        self.config = config or TabServerConfig()
+        self.host = self.config.host
+        self.port = self.config.port
+        self._server: Optional[ThreadingHTTPServer] = None
+        self._server_thread: Optional[threading.Thread] = None
+        self._running = threading.Event()
+        self._lock = threading.Lock()
+        self._data: Dict[str, Any] = {
+            "tabs": [],
+            "browsers": {},  # Track multiple browsers
+            "browser": {},   # Keep for backward compatibility
+            "last_update": 0,  # Global last update (for backward compatibility)
+            "browser_last_updates": {},  # Per-browser last update timestamps
+            "server_start_time": time.time()
+        }
+        
+        # Command queue for browser extension
+        self._commands: List[Dict[str, Any]] = []
+        self._commands_lock = threading.Lock()
+        
+        # Track browser statuses
+        self._browser_statuses = {}
+        self._tabs = []
+        self._extension_connected = False
+        self._start_time = time.time()
+        
+        self._initialized = True
+        
+        # Register cleanup on exit
+        import atexit
+        atexit.register(self.cleanup)
+    
+    def cleanup(self):
+        """Clean up resources on exit."""
+        self.stop()
+    
+    def is_running(self) -> bool:
+        """
+        Check if the tab server is running.
+        
+        Returns:
+            bool: True if the tab server is running
+        """
+        return self._running.is_set()
+        
+    def is_port_available(self, port: Optional[int] = None) -> bool:
+        """
+        Check if a port is available.
+        
+        Args:
+            port: Port to check (default: self.port)
+            
+        Returns:
+            bool: True if the port is available, False otherwise
+        """
+        port = port or self.port
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex((self.host, port)) != 0
+    
+    def start(self, port: Optional[int] = None) -> bool:
+        """
+        Start the tab server.
+        
+        Args:
+            port: Optional port override
+            
+        Returns:
+            bool: True if server started successfully, False otherwise
+        """
+        if port is not None:
+            self.port = port
+            
+        if self._server_thread and self._server_thread.is_alive():
+            logger.info("Tab server is already running")
+            return True
+            
+        # Ensure we have a valid port
+        if self.port is None:
+            self.port = self.config.port or 5000
+            
+        # Find an available port if needed
+        if self.port == 0:
+            for port in range(5000, 5010):
+                if self.is_port_available(port):
+                    self.port = port
+                    logger.info(f"Found available port: {self.port}")
+                    break
+            else:
+                logger.error("Could not find an available port")
+                return False
+        
+        # Check if port is available
+        if not self.is_port_available():
+            logger.warning(f"Port {self.port} is not available, trying to find an available port")
+            # Try to find an available port
+            for test_port in range(self.port + 1, self.port + 10):
+                if self.is_port_available(test_port):
+                    self.port = test_port
+                    logger.info(f"Found available port: {self.port}")
+                    break
+            else:
+                logger.error("Could not find an available port")
+                return False
+        
+        # Start the server
+        max_retries = 3
+        retry_count = 0
+        
+        try:
+            while retry_count < max_retries:
+                try:
+                    self._server = ThreadingHTTPServer((self.host, self.port), self._make_handler())
+                    self._server.timeout = 1
+                    self._running.set()
+                    self._server_thread = threading.Thread(
+                        target=self._run_server,
+                        daemon=True,
+                        name="TabServerThread"
+                    )
+                    self._server_thread.start()
+                    logger.info(f"Tab server started on {self.host}:{self.port}")
+                    return True
+                except Exception as e:
+                    retry_count += 1
+                    logger.error(f"Failed to start TabServer (attempt {retry_count}/{max_retries}): {e}")
+                    self._server = None
+                    self._server_thread = None
+                    
+                    if retry_count < max_retries:
+                        time.sleep(1)  # Wait before retrying
+            return False
+        except Exception as e:
+            logger.error(f"Failed to start tab server: {e}")
+            return False
+    
+    def _run_server(self):
+        """Run the server in a loop until stopped."""
+        try:
+            logger.info("Tab server thread started")
+            while self._running.is_set():
+                try:
+                    self._server.handle_request()
+                except Exception as e:
+                    if self._running.is_set():  # Only log if we're still supposed to be running
+                        logger.error(f"Error handling request: {e}")
+        except Exception as e:
+            logger.error(f"Tab server thread error: {e}")
+        finally:
+            logger.info("Tab server thread stopped")
+    
+    def stop(self):
+        """Stop the tab server."""
+        if not self._running.is_set():
+            logger.info("Tab server is not running")
+            return True
+            
+        logger.info("Stopping tab server...")
+        self._running.clear()
+        
+        # Try to send a shutdown request to the server
+        def send_shutdown_request():
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.connect((self.host, self.port))
+                    s.sendall(b"GET /__shutdown__ HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                    s.close()
+            except:
+                pass  # Ignore errors, we're shutting down anyway
+        
+        # Start a thread to send the shutdown request
+        threading.Thread(target=send_shutdown_request, daemon=True).start()
+        
+        # Use the forceful shutdown method to ensure clean shutdown
+        self._forceful_shutdown()
+        
+        logger.info("Tab server stopped")
+        return True
+    
+    def _forceful_shutdown(self):
+        """
+        Robustly shut down the ThreadingHTTPServer and its thread, avoiding deadlocks and port reuse issues.
+        
+        This method is required because Python's ThreadingHTTPServer/shutdown() can hang indefinitely on Windows
+        when there are active connections, and the socket may remain in TIME_WAIT state preventing port reuse.
+        
+        Instead, we:
+        1. Clear the running flag to signal the thread to stop
+        2. Create a new socket connection to unblock server.handle_request()
+        3. Close the server socket directly
+        4. Join the thread with a timeout
+        5. Set all references to None
+        
+        This pattern is robust and cross-platform, and is safe to use in test and production code.
+        See: https://github.com/python/cpython/issues/85240, https://github.com/streamlit/streamlit/issues/7163
+        """
+        if not self._server:
+            return
+            
+        # Signal the thread to stop
+        self._running.clear()
+        
+        # Define a function to shutdown the server
+        def shutdown_server():
+            try:
+                # Connect to the server to unblock handle_request()
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.connect((self.host, self.port))
+                    s.close()
+            except:
+                pass  # Ignore errors, we're shutting down anyway
+        
+        # Start a thread to shutdown the server
+        threading.Thread(target=shutdown_server, daemon=True).start()
+        
+        # Close the server socket directly
+        if hasattr(self._server, 'socket'):
+            try:
+                self._server.socket.close()
+            except:
+                pass
+                
+        # Wait for the thread to stop
+        if self._server_thread and self._server_thread.is_alive():
+            self._server_thread.join(timeout=5)
+            
+        # Clean up references
+        self._server = None
+        self._server_thread = None
+    
+    def update_tabs(self, data: Dict[str, Any]):
+        """
+        Update the tab data in a thread-safe manner.
+        
+        Args:
+            data: Dictionary containing tab data
+        """
+        if not isinstance(data, dict):
+            logger.error(f"Invalid tab data format: {type(data)}")
+            return
+            
+        with self._lock:
+            try:
+                # Extract browser name from data
+                browser_name = data.get("browser", "unknown")
+                
+                # Update tabs
+                if "tabs" in data and isinstance(data["tabs"], list):
+                    self._tabs = data["tabs"]
+                    self._extension_connected = True
+                    
+                    # Update browser-specific data
+                    self._browser_statuses[browser_name] = {
+                        "last_update": time.time(),
+                        "tab_count": len(data["tabs"]),
+                        "active_tab": next((tab for tab in data["tabs"] if tab.get("active", False)), None)
+                    }
+                    
+                    # Update legacy data structure for backward compatibility
+                    self._data["tabs"] = data["tabs"]
+                    self._data["browser"] = data.get("browser", {})
+                    self._data["last_update"] = time.time()
+                    self._data["browser_last_updates"][browser_name] = time.time()
+                    
+                    logger.debug(f"Updated {len(data['tabs'])} tabs from {browser_name}")
+                else:
+                    logger.warning(f"No tabs found in update from {browser_name}")
+            except Exception as e:
+                logger.error(f"Error updating tabs: {e}")
+    
+    def add_command(self, command: Dict[str, Any]):
+        """
+        Add a command to the command queue for the browser extension.
+        
+        Args:
+            command: Dictionary containing command data with format:
+                    {"action": "close_tab", "data": {"tabId": 123, "windowId": 456, ...}}
+        """
+        if not isinstance(command, dict) or "action" not in command:
+            logger.error(f"Invalid command format: {command}")
+            return
+            
+        with self._commands_lock:
+            # Add timestamp and ID if not present
+            command["timestamp"] = time.time()
+            if "id" not in command:
+                command["id"] = f"cmd_{time.time()}_{len(self._commands)}"
+                
+            # Add the command to the queue
+            self._commands.append(command)
+            logger.debug(f"Added command: {command['action']}")
+    
+    def get_commands(self, browser_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get all pending commands for the browser extension.
+        
+        Args:
+            browser_name: Optional browser name to filter commands by
+            
+        Returns:
+            List of command dictionaries
+        """
+        with self._commands_lock:
+            if not browser_name:
+                return self._commands.copy()
+                
+            # Filter commands by browser name
+            return [cmd for cmd in self._commands if cmd.get("browser") == browser_name or "browser" not in cmd]
+    
+    def clear_commands(self):
+        """
+        Clear all pending commands after they've been processed.
+        """
+        with self._commands_lock:
+            self._commands.clear()
+    
+    def get_tabs(self) -> List[Dict[str, Any]]:
+        """
+        Get a thread-safe copy of the tab data.
+        
+        Returns:
+            List of tab dictionaries
+        """
+        with self._lock:
+            return self._tabs.copy()
+    
+    def get_active_tab(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the currently active tab.
+        
+        Returns:
+            dict or None: The active tab data or None if no active tab
+        """
+        tabs = self.get_tabs()
+        return next((tab for tab in tabs if tab.get("active", False)), None)
+    
+    def is_extension_connected(self, browser_name: Optional[str] = None) -> bool:
+        """
+        Check if the browser extension is connected.
+        
+        Args:
+            browser_name: Optional browser name to check specific browser connection
+            
+        Returns:
+            bool: True if the extension has sent data recently, False otherwise
+        """
+        current_time = time.time()
+        connection_timeout = 30  # Consider extension disconnected after 30 seconds of no updates
+        
+        with self._lock:
+            if browser_name:
+                # Check specific browser connection
+                status = self._browser_statuses.get(browser_name, {})
+                last_update = status.get("last_update", 0)
+                return (current_time - last_update) < connection_timeout
+            else:
+                # Check if any browser is connected
+                return any(
+                    (current_time - status.get("last_update", 0)) < connection_timeout
+                    for status in self._browser_statuses.values()
+                )
+    
+    def _should_block_url(self, url: str, domain: str, browser_name: str) -> bool:
+        """
+        Check if a URL should be blocked based on domain classifier.
+        
+        Args:
+            url: The URL to check
+            domain: The domain extracted from the URL
+            browser_name: The name of the browser making the request
+            
+        Returns:
+            bool: True if the URL should be blocked, False otherwise
+        """
+        # This is a placeholder for domain classification logic
+        # In a real implementation, this would check against the domain classifier
+        return False
+    
+    def _make_handler(self):
+        """Create HTTP request handler."""
+        server_instance = self
+        
+        class TabRequestHandler(BaseHTTPRequestHandler):
+            """HTTP request handler for tab server endpoints."""
+            
+            def do_OPTIONS(self):
+                """Handle CORS preflight requests."""
+                self._set_headers(200)
+                self.end_headers()
+            
+            def _set_headers(self, status_code=200, content_type="application/json"):
+                """Set response headers with CORS support."""
+                self.send_response(status_code)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+            
+            def _send_json(self, code: int, data: Dict[str, Any]) -> None:
+                """Send a JSON response."""
+                self._set_headers(code)
+                self.wfile.write(json.dumps(data).encode())
+            
+            def _handle_status(self):
+                """Handle GET to status endpoint."""
+                try:
+                    status_data = {
+                        "status": "ok",
+                        "server": "FocusGuard Tab Server",
+                        "version": "1.0.0",
+                        "uptime": time.time() - server_instance._start_time,
+                        "extension_connected": server_instance.is_extension_connected(),
+                        "tab_count": len(server_instance.get_tabs()),
+                        "browsers": list(server_instance._browser_statuses.keys())
+                    }
+                    self._send_json(200, status_data)
+                except Exception as e:
+                    logger.error(f"Error handling status request: {e}")
+                    self._send_json(500, {"error": "Internal Server Error", "details": str(e)})
+            
+            def _handle_get_tabs(self):
+                """Handle GET to tabs endpoint."""
+                try:
+                    self._send_json(200, {"tabs": server_instance.get_tabs()})
+                except Exception as e:
+                    logger.error(f"Error handling get tabs request: {e}")
+                    self._send_json(500, {"error": "Internal Server Error", "details": str(e)})
+            
+            def _handle_get_commands(self):
+                """Handle GET to command endpoint."""
+                try:
+                    # Parse query parameters
+                    parsed = urllib.parse.urlparse(self.path)
+                    params = urllib.parse.parse_qs(parsed.query)
+                    browser = params.get("browser", [None])[0]
+                    
+                    # Get commands for the specified browser
+                    commands = server_instance.get_commands(browser)
+                    self._send_json(200, {"commands": commands})
+                except Exception as e:
+                    logger.error(f"Error handling get commands request: {e}")
+                    self._send_json(500, {"error": "Internal Server Error", "details": str(e)})
+            
+            def _handle_should_block(self):
+                """Handle GET to should_block endpoint."""
+                try:
+                    # Parse query parameters
+                    parsed = urllib.parse.urlparse(self.path)
+                    params = urllib.parse.parse_qs(parsed.query)
+                    
+                    url = params.get("url", [""])[0]
+                    domain = params.get("domain", [""])[0]
+                    browser = params.get("browser", ["unknown"])[0]
+                    
+                    if not url or not domain:
+                        self._send_json(400, {"error": "Missing required parameters", "should_block": False})
+                        return
+                        
+                    # Check if the URL should be blocked
+                    should_block = server_instance._should_block_url(url, domain, browser)
+                    self._send_json(200, {"should_block": should_block, "url": url, "domain": domain})
+                except Exception as e:
+                    logger.error(f"Error handling should_block request: {e}")
+                    self._send_json(500, {"error": "Internal Server Error", "details": str(e)})
+            
+            def _handle_post_tabs(self):
+                """Handle POST to tabs endpoint."""
+                try:
+                    content_length = int(self.headers['Content-Length'])
+                    post_data = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(post_data)
+                    
+                    # Update tab data
+                    server_instance.update_tabs(data)
+                    self._send_json(200, {"status": "ok"})
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON received: {e}")
+                    self._send_json(400, {"error": "Invalid JSON", "details": str(e)})
+                except ValueError as e:
+                    logger.error(f"Invalid data format: {e}")
+                    self._send_json(400, {"error": "Invalid data format", "details": str(e)})
+                except Exception as e:
+                    logger.error(f"Error processing tab data: {e}")
+                    self._send_json(500, {"error": "Internal Server Error", "details": str(e)})
+            
+            def _handle_post_commands(self):
+                """Handle POST to command endpoint."""
+                try:
+                    content_length = int(self.headers['Content-Length'])
+                    post_data = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(post_data)
+                    
+                    # If the browser acknowledges commands, clear them
+                    if data.get("status") == "processed":
+                        # Get browser name if provided
+                        browser_name = data.get("browser")
+                        if browser_name:
+                            logger.info(f"Command acknowledgment from browser: {browser_name}")
+                        
+                        server_instance.clear_commands()
+                        self._send_json(200, {"status": "ok"})
+                    else:
+                        self._send_json(400, {"error": "Invalid acknowledgment"})
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON received: {e}")
+                    self._send_json(400, {"error": "Invalid JSON", "details": str(e)})
+                except ValueError as e:
+                    logger.error(f"Invalid data format: {e}")
+                    self._send_json(400, {"error": "Invalid data format", "details": str(e)})
+                except Exception as e:
+                    logger.error(f"Error processing command acknowledgment: {e}")
+                    self._send_json(500, {"error": "Internal Server Error", "details": str(e)})
+            
+            def do_GET(self):
+                """Handle GET requests for status and tab data endpoints."""
+                try:
+                    if self.path == "/__shutdown__":
+                        # Special endpoint for clean shutdown
+                        self._set_headers(200)
+                        self.wfile.write(b"Shutdown request received")
+                        return
+                    elif self.path.startswith("/api/status"):
+                        self._handle_status()
+                    elif self.path.startswith("/api/tabs"):
+                        self._handle_get_tabs()
+                    elif self.path.startswith("/api/command"):
+                        self._handle_get_commands()
+                    elif self.path.startswith("/api/should_block"):
+                        self._handle_should_block()
+                    else:
+                        self.send_error(404, "Not Found")
+                except Exception as e:
+                    logger.error(f"Error handling GET request: {e}")
+                    self._send_json(500, {"error": "Internal Server Error"})
+
+            def do_POST(self):
+                """Handle POST requests for updating tab data."""
+                try:
+                    # Parse the path to handle query parameters
+                    parsed_path = urllib.parse.urlparse(self.path)
+                    base_path = parsed_path.path
+                    
+                    if base_path == "/api/tabs":
+                        self._handle_post_tabs()
+                    elif base_path == "/api/command":
+                        self._handle_post_commands()
+                    else:
+                        self._send_json(404, {"error": "Not found", "path": self.path})
+                except Exception as e:
+                    logger.error(f"Error handling POST request: {e}")
+                    self._send_json(500, {"error": "Internal Server Error"})
+            
+            def log_message(self, format, *args):
+                """Override log_message to use our logger."""
+                logger.debug(f"{self.address_string()} - {format % args}")
+        
+        return TabRequestHandler
+
+
+def get_tab_server(config: Optional[TabServerConfig] = None) -> TabServer:
+    """Get the singleton tab server instance.
+    
+    Args:
+        config: Optional configuration for the tab server
+    
+    Returns:
+        TabServer: The singleton tab server instance
+    """
+    global _tab_server_instance
+    if _tab_server_instance is None:
+        _tab_server_instance = TabServer(config)
+    return _tab_server_instance
+
+
+def is_running() -> bool:
+    """Check if the tab server is running.
+    
+    Returns:
+        bool: True if the tab server is running, False otherwise
+    """
+    server = get_tab_server()
+    return server.is_running()
+
+
+def start_tab_server(port: int = 5000) -> bool:
+    """Start the tab server on the specified port.
+    
+    Args:
+        port: Port to run the tab server on
+        
+    Returns:
+        bool: True if the tab server was started successfully
+    """
+    server = get_tab_server()
+    return server.start(port)
+
+
+def stop_tab_server() -> bool:
+    """Stop the tab server.
+    
+    Returns:
+        bool: True if the tab server was stopped successfully
+    """
+    server = get_tab_server()
+    return server.stop()
+
+
+def main():
+    """Main function for standalone testing."""
+    logging.basicConfig(level=logging.DEBUG)
+    server = get_tab_server()
+    if server.start(5000):
+        print("Tab server running on http://localhost:5000")
+        print("Press Ctrl+C to stop...")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            server.stop()
+    else:
+        print("Failed to start tab server")
+
+
+if __name__ == "__main__":
+    main()

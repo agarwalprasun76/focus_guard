@@ -1,0 +1,10 @@
+# Core packages - essential for basic functionality
+transformers>=4.30.0
+torch>=2.0.0
+accelerate>=0.20.0
+
+# API-based classifiers
+openai>=1.0.0  # Required for OpenAI API integration
+
+# Optional - classifier will work without these using fallback modes
+# bitsandbytes  # Uncomment if you want to try 8-bit quantization

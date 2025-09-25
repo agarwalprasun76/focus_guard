@@ -1,0 +1,16 @@
+{
+    "manifest_version": 2,
+    "name": "FocusGuard Tab Watcher",
+    "version": "1.0.0",
+    "description": "Streams the list of open tabs to FocusGuard.",
+    "permissions": ["tabs", "<all_urls>", "nativeMessaging"],
+    "background": { "scripts": ["background.js"] },
+    "browser_action": {
+      "default_icon": { "16": "icons/empty16_connected.png" }
+    },
+    "icons": { "16": "icons/empty16_connected.png", "32": "icons/empty16_connected.png" },
+    "incognito": "split",
+    "externally_connectable": {
+      "ids": ["apnmgllhphjajigkjlakkkpinbmjgghk"]
+    }
+}

@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "FocusGuard Tab Watcher (MV3)",
+  "version": "1.0.0",
+  "description": "Streams the list of open tabs to FocusGuard and blocks distracting content.",
+  "permissions": ["tabs", "nativeMessaging", "alarms", "webRequest", "declarativeNetRequest"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": { "16": "icons/empty16_connected.png" }
+  },
+  "icons": {
+    "16": "icons/empty16_connected.png",
+    "32": "icons/empty16_connected.png"
+  },
+  "incognito": "split",
+  "externally_connectable": {
+    "ids": ["apnmgllhphjajigkjlakkkpinbmjgghk"]
+  }
+}
+

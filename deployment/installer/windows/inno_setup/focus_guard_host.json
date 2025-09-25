@@ -1,0 +1,9 @@
+{
+  "name": "com.focusguard.native",
+  "description": "FocusGuard native bridge",
+  "path": "C:\\\\Users\\\\prasun_agarwal\\\\AppData\\\\Local\\FocusGuard\\focus_guard_native_host.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://apnmgllhphjajigkjlakkkpinbmjgghk/"
+  ]
+}

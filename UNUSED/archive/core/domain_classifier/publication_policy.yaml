@@ -1,0 +1,30 @@
+# Publication Classifier Policy Configuration
+
+# Classes that are considered distractions (will be blocked)
+block_classes:
+  - LANGUAGE AND LITERATURE       
+  - FINE ARTS
+  - MUSIC AND BOOKS ON MUSIC
+  - GENERAL WORKS
+  - PHILOSOPHY, PSYCHOLOGY, RELIGION
+  - NAVAL SCIENCE
+  - FICTION
+  - ENTERTAINMENT
+
+# Classes that are considered useful (will be allowed)
+allow_classes:
+  - SCIENCE
+  - EDUCATION
+  - TECHNOLOGY
+  - SOCIAL SCIENCES
+  - MEDICINE
+  - AGRICULTURE
+  - COMPUTER SCIENCE
+  - MATHEMATICS
+  - STATISTICS
+
+# File extensions that are automatically blocked
+file_blocklist: [".epub", ".mobi", ".mp3", ".mp4", ".mov", ".avi"]
+
+# Confidence threshold required to make a definitive classification
+threshold: 0.75

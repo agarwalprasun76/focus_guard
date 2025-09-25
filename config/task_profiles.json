@@ -1,0 +1,10 @@
+{
+  "tasks": [
+    {
+      "name": "Essay Writing",
+      "allowed_apps": ["Word", "Notepad", "LibreOffice Writer"],
+      "allowed_sites": ["docs.google.com"],
+      "alert_threshold_sec": 10
+    }
+  ]
+}

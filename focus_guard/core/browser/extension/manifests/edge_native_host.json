@@ -1,0 +1,9 @@
+{
+  "name": "com.focusguard.native",
+  "description": "Focus Guard native messaging host",
+  "path": "C:\\Users\\prasun_agarwal\\focus_guard\\focus_guard\\core\\browser\\extension\\focus_guard_native_host.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://kfhbbnokafpbmjchnjghbdkpkjdpbldh/"
+  ]
+}

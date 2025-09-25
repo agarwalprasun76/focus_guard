@@ -1,0 +1,16 @@
+{
+  "tab_server": {
+    "host": "127.0.0.1",
+    "port": 5000,
+    "connection_timeout": 30,
+    "max_command_queue_size": 100,
+    "max_retries": 3,
+    "retry_delay": 1
+  },
+  "browser_integration": {
+    "polling_interval": 1.0,
+    "max_tab_history": 100,
+    "enable_auto_blocking": true,
+    "enable_notifications": true
+  }
+}

@@ -1,0 +1,136 @@
+publication-classifier/
+├─ pyproject.toml          ← Poetry-style build + dependencies
+├─ README.md               ← Usage & API docs
+├─ src/publication_classifier/
+│  ├─ __init__.py
+│  ├─ fetch.py             ← Range fetch + MIME sniff
+│  ├─ extract.py           ← Trafilatura & pdfminer wrappers
+│  ├─ classifier.py        ← Hugging Face pipeline
+│  ├─ policy.py            ← Load YAML + decision logic
+│  ├─ cli.py               ← `pubclass URL [...]`
+│  └─ service.py           ← FastAPI micro-service (`/classify`)
+├─ config/
+│  └─ policy.yaml          ← block/allow lists + thresholds
+├─ scripts/
+│  └─ dev-server.sh        ← `uvicorn publication_classifier.service:app`
+├─ tests/                  ← pytest unit + e2e tests
+└─ docker/
+   └─ Dockerfile
+
+
+[project]
+dependencies = [
+  "httpx>=0.27.0",
+  "trafilatura>=2.0.0",          # HTML main-text extraction :contentReference[oaicite:0]{index=0}
+  "pdfminer.six>=20250417",      # lightweight PDF text grabber :contentReference[oaicite:1]{index=1}
+  "tldextract>=3.5",
+  "transformers>=4.41.1",        # BERT runtime
+  "torch>=2.3",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "fastapi>=0.111.0",
+  "uvicorn[standard]>=0.29",
+  "rich>=13.7",                  # pretty CLI output
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "black", "ruff"]   
+
+import httpx, mimetypes
+
+RANGE = "bytes=0-65535"          # first 64 kB
+
+async def head_and_chunk(url: str) -> tuple[str, bytes]:
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as c:
+        r = await c.get(url, headers={"Range": RANGE})
+    ctype = r.headers.get("content-type") or mimetypes.guess_type(url)[0] or ""
+    return ctype.lower(), r.content           # 206 Partial is fine :contentReference[oaicite:2]{index=2}
+from transformers import pipeline
+_MODEL = "institutional/institutional-books-topic-classifier-bert"  # LoC 1-level :contentReference[oaicite:3]{index=3}
+clf = pipeline("text-classification", model=_MODEL, truncation=True)
+
+def predict(text: str, max_len: int = 2048):
+    return clf(text[:max_len])[0]     # {label: "...", score: 0.xx}
+block_classes:
+  - LANGUAGE AND LITERATURE       # P, PN, PR, PZ …
+  - FINE ARTS
+  - MUSIC AND BOOKS ON MUSIC
+allow_classes:
+  - SCIENCE
+  - EDUCATION
+  - TECHNOLOGY
+  - SOCIAL SCIENCES
+  - MEDICINE
+file_blocklist: [".epub", ".mobi", ".mp3", ".mp4"]
+threshold: 0.85
+pubclass https://example.com/foo.pdf        # prints JSON
+pubclass --html https://example.com         # force treat as HTML
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.post("/classify")
+async def classify(url: str):
+    ctype, chunk = await head_and_chunk(url)
+    text = extract_text(ctype, chunk)
+    label, score = predict(text)
+    decision = decide(label, score, url)
+    return {"label": label, "score": score, "decision": decision}
+FROM python:3.10-slim
+WORKDIR /app
+COPY pyproject.toml .
+RUN pip install --no-cache-dir poetry && poetry install --only main
+COPY src/ ./src
+ENV HF_HOME=/models HF_HUB_DISABLE_SYMLINKS_WARNING=1
+RUN python - <<'PY'               # warm-up model weights at build time
+from transformers import pipeline, logging
+logging.set_verbosity_error()
+pipeline("text-classification",
+         model="institutional/institutional-books-topic-classifier-bert",
+         truncation=True) ; print("Model cached")
+PY
+CMD ["uvicorn", "publication_classifier.service:app","--host","0.0.0.0","--port","8077"]
+import asyncio, httpx, subprocess, time, pytest
+
+@pytest.mark.asyncio
+async def test_hp_pdf_blocks(tmp_path):
+    pr = subprocess.Popen(["pubclass", "https://.../Harry_Potter.pdf"],
+                          stdout=subprocess.PIPE, text=True)
+    out, _ = pr.communicate(timeout=60)
+    assert '"decision": "block"' in out
+
+What it does & why
+
+Quick start (poetry install, pubclass URL, uvicorn …)
+
+API spec (POST /classify {url: …} returns JSON)
+
+How to adjust policy.yaml
+
+Performance notes (≈45 ms per call on 1 × vCPU)
+
+Caching (sqlite:///policy_cache.db) – optional stretch goal.
+
+### TASK 1 – Scaffold 🏗️
+Create repo `publication-classifier` with the file/folder layout shown in section 1
+and a fully populated `pyproject.toml` (section 2).
+
+### TASK 2 – Core code 🧠
+Implement modules in `src/publication_classifier/` exactly as specified in section 3,
+passing minimal mypy checks and `pytest -q` on the sample tests.
+
+### TASK 3 – Tests ✅
+Generate `tests/` with unit tests + an e2e test that calls the FastAPI app
+via TestClient and asserts the decision logic.
+
+### TASK 4 – Dev image 🐳
+Add `docker/Dockerfile` (section 4) and a matching `.devcontainer/devcontainer.json`
+for one-click DevPod / WSL spins.
+
+### TASK 5 – Docs 📚
+Write `README.md` covering installation, CLI usage, API usage,
+and how to tune `config/policy.yaml`.
+
+### TASK 6 – “pubclass” CLI 🎛️
+Expose `pubclass` via `entry-points.console_scripts` in `pyproject.toml`.
+
+🎉 Hand back when `poetry run pytest` is green and `pubclass --help` prints.

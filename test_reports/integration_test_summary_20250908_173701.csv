@@ -1,0 +1,5 @@
+Test Name,Module,Status,Duration (s),Error Message
+test_tab_blocking_pipeline,focus_guard/tests/integration/test_tab_blocking_pipeline.py,failed,2.103,Some tests failed
+test_browser_extension_integration,focus_guard/tests/integration/test_browser_extension_integration.py,error,0.118,Test execution interrupted or error occurred
+test_error_scenarios,focus_guard/tests/integration/test_error_scenarios.py,error,0.189,Test execution interrupted or error occurred
+test_component_interactions,focus_guard/tests/integration/test_component_interactions.py,failed,0.512,Some tests failed

@@ -1,0 +1,5 @@
+# Browser detection dependencies
+psutil>=5.9.0
+pywin32>=305; sys_platform == 'win32'
+uiautomation>=2.0.15; sys_platform == 'win32'
+requests>=2.28.0

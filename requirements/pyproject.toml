@@ -1,0 +1,30 @@
+[project]
+name = "focus_guard"
+version = "0.1.0"
+description = "A cross-platform application for monitoring user activity and reducing distractions."
+authors = [
+    { name = "Prasun Agarwal" },
+    { name = "Siyona Agarwal" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "psutil>=5.8.0",
+    "pywin32>=300; sys_platform == 'win32'"  # Windows only
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-mock"
+]
+
+[tool.setuptools]
+packages = ["utils", "demos", "tests"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests/cross_platform"
+]

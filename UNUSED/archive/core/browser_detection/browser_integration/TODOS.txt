@@ -1,0 +1,1 @@
+Can you add an item to modify the log files focusguard_debug.log and focusguard_tab_log.txt files so that new files get written every calendar day. Currently it appears that they have been running for a while and they are close to 2.4 gb in size.

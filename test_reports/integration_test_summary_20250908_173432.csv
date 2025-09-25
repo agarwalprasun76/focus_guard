@@ -1,0 +1,5 @@
+Test Name,Module,Status,Duration (s),Error Message
+py_module,focus_guard/tests/integration/test_tab_blocking_pipeline.py,failed,4.801,Exit code: 1
+py_module,focus_guard/tests/integration/test_browser_extension_integration.py,failed,1.707,Exit code: 2
+py_module,focus_guard/tests/integration/test_error_scenarios.py,failed,1.551,Exit code: 2
+py_module,focus_guard/tests/integration/test_component_interactions.py,failed,2.516,Exit code: 1

@@ -1,0 +1,35 @@
+{
+  "blocking": {
+    "enabled": true,
+    "blocked_categories": [
+      "ENTERTAINMENT",
+      "SOCIAL_MEDIA", 
+      "GAMES",
+      "video_streaming"
+    ],
+    "whitelist": [
+      "github.com",
+      "stackoverflow.com",
+      "docs.python.org",
+      "developer.mozilla.org"
+    ],
+    "focus_modes": {
+      "work": {
+        "blocked_categories": [
+          "ENTERTAINMENT", 
+          "SOCIAL_MEDIA",
+          "GAMES",
+          "video_streaming"
+        ]
+      },
+      "study": {
+        "blocked_categories": [
+          "ENTERTAINMENT",
+          "SOCIAL_MEDIA", 
+          "GAMES",
+          "video_streaming"
+        ]
+      }
+    }
+  }
+}

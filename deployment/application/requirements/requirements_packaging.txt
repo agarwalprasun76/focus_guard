@@ -1,0 +1,16 @@
+# PyInstaller packaging requirements
+pyinstaller>=5.0
+pyinstaller[encryption]
+
+# Core Focus Guard dependencies (already in main requirements)
+# These will be bundled into the executable
+openai
+PyQt5
+asyncio-mqtt
+requests
+aiofiles
+psutil
+
+# Optional: For advanced packaging
+pefile  # For executable analysis
+pywin32  # For Windows-specific features

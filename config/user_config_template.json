@@ -1,0 +1,65 @@
+{
+  "user_id": "default",
+  "user_name": "Default User",
+  "parent_email": "parent@example.com",
+  "alert_system": {
+    "cooldown_period": 10,
+    "escalation_threshold": 3,
+    "escalation_window": 60,
+    "providers": {
+      "popup": {
+        "enabled": true,
+        "popup_duration": 30
+      },
+      "sound": {
+        "enabled": true,
+        "volume": 0.8,
+        "repeat_count": 2,
+        "repeat_interval": 0.5
+      },
+      "email": {
+        "enabled": true,
+        "email_recipient": "",
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "smtp_username": "",
+        "smtp_password": "",
+        "use_tls": true,
+        "from_name": "FocusGuard App",
+        "subject_prefix": "FocusGuard Alert",
+        "max_emails_per_day": 5,
+        "include_screenshot": true
+      },
+      "desktop_notification": {
+        "enabled": true
+      },
+      "app_blocker": {
+        "enabled": false,
+        "block_duration": 300,
+        "block_threshold": 5
+      }
+    }
+  },
+  "distraction_detection": {
+    "allowed_apps": ["Windsurf.exe"],
+    "distraction_thresholds": {
+      "default": 10,
+      "social_media": 5,
+      "games": 5,
+      "video_streaming": 10
+    },
+    "user_overrides": {}
+  },
+  "monitoring": {
+    "check_interval": 5,
+    "session_duration": 60,
+    "screenshot_enabled": true,
+    "screenshot_interval": 60
+  },
+  "data_storage": {
+    "log_level": "INFO",
+    "log_to_file": true,
+    "history_retention_days": 5,
+    "data_directory": ""
+  }
+}

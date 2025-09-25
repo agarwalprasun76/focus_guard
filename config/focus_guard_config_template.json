@@ -1,0 +1,103 @@
+{
+  "user": {
+    "name": "Student",
+    "parent_email": "parent@example.com"
+  },
+  "alert_system": {
+    "cooldown_period": 15,
+    "escalation_threshold": 2,
+    "escalation_window": 120,
+    "providers": {
+      "popup": {
+        "enabled": true,
+        "popup_duration": 30
+      },
+      "sound": {
+        "enabled": true,
+        "volume": 0.7,
+        "repeat_count": 2,
+        "repeat_interval": 0.5
+      },
+      "email": {
+        "enabled": true,
+        "email_recipient": "",
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "smtp_username": "your.email@gmail.com",
+        "smtp_password": "your-app-password-here",
+        "use_tls": true,
+        "use_ssl": false,
+        "from_name": "FocusGuard App",
+        "subject_prefix": "FocusGuard Alert",
+        "max_emails_per_day": 5,
+        "include_screenshot": true
+      },
+      "desktop_notification": {
+        "enabled": true
+      },
+      "app_blocker": {
+        "enabled": false,
+        "block_duration": 300,
+        "block_threshold": 5
+      }
+    }
+  },
+  "distraction_detection": {
+    "allowed_apps": [
+      "code.exe",
+      "explorer.exe", 
+      "notepad.exe", 
+      "word.exe", 
+      "excel.exe", 
+      "powerpnt.exe",
+      "teams.exe",
+      "zoom.exe",
+      "chrome.exe"
+    ],
+    "distraction_thresholds": {
+      "default": 10,
+      "social_media": 5,
+      "games": 0,
+      "video_streaming": 10
+    },
+    "categories": {
+      "social_media": [
+        "facebook.com",
+        "twitter.com",
+        "instagram.com",
+        "tiktok.com",
+        "snapchat.com",
+        "reddit.com"
+      ],
+      "games": [
+        "steam.exe",
+        "epicgameslauncher.exe",
+        "robloxplayer.exe",
+        "minecraft.exe",
+        "league of legends.exe",
+        "fortnite.exe"
+      ],
+      "video_streaming": [
+        "youtube.com",
+        "netflix.com",
+        "hulu.com",
+        "twitch.tv",
+        "disney+.com",
+        "hbomax.com"
+      ]
+    },
+    "user_overrides": {}
+  },
+  "monitoring": {
+    "check_interval": 5,
+    "session_duration": 120,
+    "screenshot_enabled": true,
+    "screenshot_interval": 60
+  },
+  "data_storage": {
+    "log_level": "INFO",
+    "log_to_file": true,
+    "history_retention_days": 30,
+    "data_directory": ""
+  }
+}

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Focus Guard Integration Test Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background-color: #f0f0f0; padding: 20px; border-radius: 5px; }
+        .summary { display: flex; gap: 20px; margin: 20px 0; }
+        .metric { background-color: #e8f4fd; padding: 15px; border-radius: 5px; text-align: center; }
+        .metric.passed { background-color: #d4edda; }
+        .metric.failed { background-color: #f8d7da; }
+        .metric.skipped { background-color: #fff3cd; }
+        .test-results { margin-top: 20px; }
+        .test-item { border: 1px solid #ddd; margin: 5px 0; padding: 10px; border-radius: 3px; }
+        .test-item.passed { border-left: 5px solid #28a745; }
+        .test-item.failed { border-left: 5px solid #dc3545; }
+        .test-item.skipped { border-left: 5px solid #ffc107; }
+        .test-item.error { border-left: 5px solid #6f42c1; }
+        .error-details { background-color: #f8f9fa; padding: 10px; margin-top: 10px; font-family: monospace; font-size: 12px; }
+        .system-info { background-color: #f8f9fa; padding: 15px; margin-top: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Focus Guard Integration Test Report</h1>
+        <p>Generated: 2025-09-08T17:39:38.329506</p>
+        <p>Duration: 8.28 seconds</p>
+    </div>
+    
+    <div class="summary">
+        <div class="metric">
+            <h3>Total Tests</h3>
+            <div style="font-size: 24px; font-weight: bold;">4</div>
+        </div>
+        <div class="metric passed">
+            <h3>Passed</h3>
+            <div style="font-size: 24px; font-weight: bold;">0</div>
+        </div>
+        <div class="metric failed">
+            <h3>Failed</h3>
+            <div style="font-size: 24px; font-weight: bold;">2</div>
+        </div>
+        <div class="metric skipped">
+            <h3>Skipped</h3>
+            <div style="font-size: 24px; font-weight: bold;">0</div>
+        </div>
+    </div>
+    
+    <div class="test-results">
+        <h2>Test Results</h2>
+        
+            <div class="test-item failed">
+                <strong>test_tab_blocking_pipeline</strong> (focus_guard/tests/integration/test_tab_blocking_pipeline.py)
+                <span style="float: right;">3.304s</span>
+                <div>Status: FAILED</div>
+                <div class="error-details">Some tests failed</div>
+            </div>
+            
+            <div class="test-item error">
+                <strong>test_browser_extension_integration</strong> (focus_guard/tests/integration/test_browser_extension_integration.py)
+                <span style="float: right;">0.830s</span>
+                <div>Status: ERROR</div>
+                <div class="error-details">Test execution interrupted or error occurred</div>
+            </div>
+            
+            <div class="test-item error">
+                <strong>test_error_scenarios</strong> (focus_guard/tests/integration/test_error_scenarios.py)
+                <span style="float: right;">1.906s</span>
+                <div>Status: ERROR</div>
+                <div class="error-details">Test execution interrupted or error occurred</div>
+            </div>
+            
+            <div class="test-item failed">
+                <strong>test_component_interactions</strong> (focus_guard/tests/integration/test_component_interactions.py)
+                <span style="float: right;">2.123s</span>
+                <div>Status: FAILED</div>
+                <div class="error-details">Some tests failed</div>
+            </div>
+            
+    </div>
+    
+    <div class="system-info">
+        <h2>System Information</h2>
+        <pre>{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "python_version": "3.13.3",
+  "cpu_count": 16,
+  "memory_total": 65314537472,
+  "memory_available": 39743660032,
+  "disk_usage": {
+    "total": 999032877056,
+    "used": 686817456128,
+    "free": 312215420928
+  },
+  "timestamp": "2025-09-08T17:39:30.164523",
+  "focus_guard_version": "unknown"
+}</pre>
+    </div>
+</body>
+</html>

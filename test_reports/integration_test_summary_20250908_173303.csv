@@ -1,0 +1,5 @@
+Test Name,Module,Status,Duration (s),Error Message
+test_tab_blocking_pipeline_module,focus_guard.tests.integration.test_tab_blocking_pipeline,failed,0.380,Exit code: 4
+test_browser_extension_integration_module,focus_guard.tests.integration.test_browser_extension_integration,failed,0.111,Exit code: 4
+test_error_scenarios_module,focus_guard.tests.integration.test_error_scenarios,failed,0.113,Exit code: 4
+test_component_interactions_module,focus_guard.tests.integration.test_component_interactions,failed,0.113,Exit code: 4
