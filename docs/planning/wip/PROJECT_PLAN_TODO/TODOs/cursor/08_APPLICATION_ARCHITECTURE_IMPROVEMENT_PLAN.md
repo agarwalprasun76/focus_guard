@@ -26,23 +26,10 @@
 
 ## 1. CRITICAL Issues
 
-### 1.1 Auth Provider Login Bug
+### ~~1.1 Auth Provider Login Bug~~ — FALSE POSITIVE (verified Feb 21)
 
 **File**: `admin_ui/src/auth/AuthProvider.tsx`  
-**Line**: ~79
-
-```typescript
-async function login(username: string, password: string): Promise<void> {
-    await authApi.login(username, password);
-    const me = await authApi.me();
-    setUser(user);  // ← BUG: should be setUser(me)
-    setStatus("authenticated");
-}
-```
-
-After login, the `user` state stays null because `setUser(user)` references the stale closure value. The dashboard shows "Signed in as undefined". This only works because `bootstrapSession()` runs on refresh.
-
-**Fix**: Change `setUser(user)` to `setUser(me)`. One-line fix.
+**Status**: The actual file already has `setUser(me)` on line 75. The initial review (via subagent) reported `setUser(user)` but this was incorrect. No fix needed.
 
 ---
 
