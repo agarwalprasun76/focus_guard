@@ -283,6 +283,10 @@ class ActivityMonitorComponent(BaseComponent):
                     # Get current window info
                     window_info = self._activity_monitor.get_active_window()
                     
+                    if window_info is None:
+                        await asyncio.sleep(self._polling_interval)
+                        continue
+                    
                     # Check if window changed
                     if (self._last_window_info is None or 
                             window_info.pid != self._last_window_info.pid or

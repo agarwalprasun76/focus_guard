@@ -310,7 +310,26 @@ class PolicyEngine:
                     continue
                 
                 # Create config and policy instances
-                config = config_class(**policy_data)
+                # Remove 'type' from policy_data as it's handled separately via policy_type
+                config_data = {k: v for k, v in policy_data.items() if k != 'type'}
+                config_data['policy_type'] = policy_type
+                
+                # Convert category names back to Category enums for domain policies
+                if policy_type == BlockingPolicyType.DOMAIN and 'blocked_categories' in config_data:
+                    from focus_guard.core.domain.models import Category
+                    config_data['blocked_categories'] = {
+                        Category[cat] for cat in config_data['blocked_categories']
+                    }
+                # Convert blocked_domains and allowlist to sets
+                if 'blocked_domains' in config_data:
+                    config_data['blocked_domains'] = set(config_data['blocked_domains'])
+                if 'allowlist' in config_data:
+                    config_data['allowlist'] = set(config_data['allowlist'])
+                # Convert days_of_week to set for time-based policies
+                if 'days_of_week' in config_data:
+                    config_data['days_of_week'] = set(config_data['days_of_week'])
+                
+                config = config_class(**config_data)
                 policy = policy_class(config)
                 self.add_policy(policy)
                 

@@ -59,7 +59,7 @@ class TestWindowInfo(unittest.TestCase):
             "url": "https://example.com/test"
         }
         
-        with patch("core.utils.domain_utils.create_url_from_string") as mock_create_url:
+        with patch("focus_guard.core.domain.domain_utils_new.create_url_from_string") as mock_create_url:
             mock_url = MagicMock()
             mock_url.domain = MagicMock()
             mock_create_url.return_value = mock_url
@@ -227,7 +227,7 @@ class TestActivityEvent(unittest.TestCase):
             }
         }
         
-        with patch("core.activity.models.WindowInfo.from_dict") as mock_from_dict:
+        with patch("focus_guard.core.activity.models.WindowInfo.from_dict") as mock_from_dict:
             mock_window_info = MagicMock()
             mock_from_dict.return_value = mock_window_info
             

@@ -12,10 +12,10 @@ import logging
 from pathlib import Path
 
 # Add project root to Python path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from focus_guard.core.browser.extension.tab_server import start_tab_server
+from focus_guard.core.browser_v2.tab_server.runner import TabServerRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,9 +25,10 @@ def start_tab_server_service():
     logger.info("Starting Focus Guard tab server...")
     
     try:
-        success = start_tab_server(5000)
+        runner = TabServerRunner(host="127.0.0.1", port=58392)
+        success = runner.start()
         if success:
-            logger.info("✅ Tab server started successfully on port 5000")
+            logger.info("✅ Tab server started successfully on port 58392")
             return True
         else:
             logger.error("❌ Failed to start tab server")
@@ -45,7 +46,7 @@ def wait_for_server():
     
     for attempt in range(max_attempts):
         try:
-            response = requests.get("http://127.0.0.1:5000/api/status", timeout=5)
+            response = requests.get("http://127.0.0.1:58392/api/status", timeout=5)
             if response.status_code == 200:
                 logger.info("✅ Tab server is ready and responding")
                 return True

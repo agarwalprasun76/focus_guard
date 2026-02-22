@@ -95,6 +95,39 @@ class SQLiteUsageDatabase:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 
+                CREATE TABLE IF NOT EXISTS visible_windows (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    app_name TEXT NOT NULL,
+                    window_title TEXT,
+                    is_foreground BOOLEAN DEFAULT 0,
+                    screen_percent REAL DEFAULT 0,
+                    timestamp TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS activity_samples (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    app_name TEXT NOT NULL,
+                    window_title TEXT,
+                    domain TEXT,
+                    url TEXT,
+                    is_foreground BOOLEAN DEFAULT 1,
+                    sample_seconds REAL NOT NULL,
+                    timestamp TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_visible_windows_timestamp 
+                    ON visible_windows(timestamp);
+                CREATE INDEX IF NOT EXISTS idx_visible_windows_app 
+                    ON visible_windows(app_name, timestamp);
+                CREATE INDEX IF NOT EXISTS idx_activity_samples_timestamp
+                    ON activity_samples(timestamp);
+                CREATE INDEX IF NOT EXISTS idx_activity_samples_app
+                    ON activity_samples(app_name, timestamp);
+                CREATE INDEX IF NOT EXISTS idx_activity_samples_domain
+                    ON activity_samples(domain, timestamp);
+                
                 CREATE TABLE IF NOT EXISTS app_categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     app_name TEXT UNIQUE NOT NULL,
@@ -206,14 +239,113 @@ class SQLiteUsageDatabase:
             
             top_domains = [dict(row) for row in cursor.fetchall()]
             
+            # Get total monitored time (first to last session)
+            cursor.execute('''
+                SELECT 
+                    MIN(start_time) as first_session,
+                    MAX(end_time) as last_session
+                FROM usage_sessions 
+                WHERE DATE(start_time) = ?
+            ''', (date,))
+            time_range = cursor.fetchone()
+            
+            total_monitored_time = 0.0
+            if time_range['first_session'] and time_range['last_session']:
+                try:
+                    first = datetime.fromisoformat(time_range['first_session'])
+                    last = datetime.fromisoformat(time_range['last_session'])
+                    total_monitored_time = (last - first).total_seconds()
+                except (ValueError, TypeError):
+                    pass
+            
+            # Get visible windows stats (apps that were on screen)
+            cursor.execute('''
+                SELECT app_name, 
+                       COUNT(*) as sample_count,
+                       SUM(CASE WHEN is_foreground = 1 THEN 1 ELSE 0 END) as foreground_count,
+                       AVG(screen_percent) as avg_screen_percent
+                FROM visible_windows 
+                WHERE DATE(timestamp) = ?
+                GROUP BY app_name
+                ORDER BY sample_count DESC
+                LIMIT 15
+            ''', (date,))
+            
+            visible_apps = [dict(row) for row in cursor.fetchall()]
+            
             return {
                 'date': date,
                 'sessions_count': basic_stats['sessions_count'] or 0,
                 'total_active_time': basic_stats['total_active_time'] or 0.0,
                 'total_idle_time': basic_stats['total_idle_time'] or 0.0,
+                'total_monitored_time': total_monitored_time,
                 'top_applications': top_apps,
-                'top_domains': top_domains
+                'top_domains': top_domains,
+                'visible_applications': visible_apps
             }
+    
+    def log_visible_windows(self, windows: List[Dict[str, Any]], foreground_app: str = None):
+        """
+        Log all currently visible windows.
+        
+        Args:
+            windows: List of visible window dictionaries
+            foreground_app: Name of the foreground (active) app
+        """
+        if not windows:
+            return
+        
+        timestamp = datetime.now().isoformat()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            for window in windows:
+                app_name = window.get('app_name', 'unknown')
+                is_foreground = 1 if app_name == foreground_app else 0
+                screen_percent = window.get('percent', 0) * 100  # Convert to percentage
+                
+                cursor.execute('''
+                    INSERT INTO visible_windows 
+                    (app_name, window_title, is_foreground, screen_percent, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    app_name,
+                    window.get('window_title', ''),
+                    is_foreground,
+                    screen_percent,
+                    timestamp
+                ))
+            
+            conn.commit()
+
+    def log_activity_sample(self, window_info: WindowInfo, sample_seconds: float):
+        """Persist a per-tick foreground activity sample for interval-accurate reporting."""
+        if not window_info:
+            return
+
+        timestamp = datetime.now().isoformat()
+        safe_sample_seconds = float(max(0.0, sample_seconds or 0.0))
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                INSERT INTO activity_samples
+                (app_name, window_title, domain, url, is_foreground, sample_seconds, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    window_info.app_name,
+                    window_info.window_title,
+                    str(window_info.domain) if window_info.domain else None,
+                    str(window_info.url) if window_info.url else None,
+                    1,
+                    safe_sample_seconds,
+                    timestamp,
+                ),
+            )
+            conn.commit()
     
     def cleanup_old_data(self, days_to_keep: int = 30):
         """Remove data older than specified days."""
@@ -221,6 +353,10 @@ class SQLiteUsageDatabase:
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            
+            # Delete old visible windows
+            cursor.execute('DELETE FROM visible_windows WHERE timestamp < ?', (cutoff_date,))
+            cursor.execute('DELETE FROM activity_samples WHERE timestamp < ?', (cutoff_date,))
             
             # Delete old sessions and related data
             cursor.execute('DELETE FROM usage_sessions WHERE start_time < ?', (cutoff_date,))
@@ -365,6 +501,13 @@ class EnhancedActivityLogger:
         
         # Track activity in usage tracker
         self.usage_tracker.track_activity(window_info)
+
+        # Persist canonical per-tick sample so reporting can aggregate any ad-hoc interval
+        # without waiting for session closure.
+        self.database.log_activity_sample(window_info, float(self.interval))
+        
+        # Log all visible windows (comprehensive tracking)
+        self._log_visible_windows(window_info.app_name if window_info else None)
         
         # Update statistics
         self.total_logs += 1
@@ -379,6 +522,21 @@ class EnhancedActivityLogger:
         
         # Log to traditional text file (for backward compatibility)
         self._write_text_log(window_info)
+    
+    def _log_visible_windows(self, foreground_app: str = None):
+        """
+        Log all currently visible windows for comprehensive tracking.
+        
+        This captures apps that are on screen but not necessarily in focus,
+        like a YouTube video playing while working in another app.
+        """
+        try:
+            # Get all visible windows from the platform monitor
+            visible_windows = self.activity_monitor.get_visible_windows()
+            if visible_windows:
+                self.database.log_visible_windows(visible_windows, foreground_app)
+        except Exception as e:
+            logger.debug(f"Failed to log visible windows: {e}")
     
     def _write_text_log(self, window_info: WindowInfo):
         """Write activity to text log file for backward compatibility."""

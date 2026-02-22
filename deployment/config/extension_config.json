@@ -1,8 +1,9 @@
 {
+  "_comment": "Canonical source for extension IDs: focus_guard/core/extension_constants.py",
   "extension": {
-    "id": "hmjfbkppeejdnekjapejicmfhfogocjo",
+    "id": "hnpfnmlcmdhkbhnfifmnonehebeafclp",
     "name": "Focus Guard",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "manifest_version": 3
   },
   "deployment": {

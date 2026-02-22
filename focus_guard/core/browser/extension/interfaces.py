@@ -9,11 +9,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List, Union
 
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_HOST
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_PORT
+
 @dataclass
 class TabServerConfig:
     """Configuration for the tab server."""
-    host: str = "127.0.0.1"
-    port: int = 5000
+    host: str = DEFAULT_TAB_SERVER_HOST
+    port: int = DEFAULT_TAB_SERVER_PORT
     connection_timeout: int = 30  # seconds
     max_command_queue_size: int = 100
     max_retries: int = 3

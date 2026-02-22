@@ -13,9 +13,10 @@ from focus_guard.core.coordinator.components.base import BaseComponent
 from focus_guard.core.coordinator.interfaces import EventBus, Component
 from focus_guard.core.coordinator.events import EventTypes, EventData
 from focus_guard.core.config.interfaces import ConfigurationManager
-from focus_guard.core.browser.integration import BrowserIntegration
-from focus_guard.core.browser.extension.tab_server import TabServer, TabServerConfig
+from focus_guard.core.browser_v2.tab_server.runner import TabServerRunner
 from focus_guard.core.browser.models import BrowserTab, BrowserInfo
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_HOST
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_PORT
 
 
 def create_browser_component(event_bus: EventBus, config_manager: ConfigurationManager) -> Component:
@@ -29,32 +30,23 @@ def create_browser_component(event_bus: EventBus, config_manager: ConfigurationM
     Returns:
         Component: The configured browser integration component
     """
-    from focus_guard.core.browser.extension.tab_server import TabServer, TabServerConfig
-    from focus_guard.core.browser.integration import BrowserIntegration
-    
     # Get tab server configuration from the config manager
-    # Handle different config manager interfaces
     if hasattr(config_manager, 'get_value'):
-        host = config_manager.get_value("browser.tab_server.host", "127.0.0.1")
-        port = config_manager.get_value("browser.tab_server.port", 0)
+        host = config_manager.get_value("browser.tab_server.host", DEFAULT_TAB_SERVER_HOST)
+        port = config_manager.get_value("browser.tab_server.port", DEFAULT_TAB_SERVER_PORT)
     else:
-        host = config_manager.get("browser.tab_server.host", "127.0.0.1")
-        port = config_manager.get("browser.tab_server.port", 0)
+        host = config_manager.get("browser.tab_server.host", DEFAULT_TAB_SERVER_HOST)
+        port = config_manager.get("browser.tab_server.port", DEFAULT_TAB_SERVER_PORT)
     
-    tab_server_config = TabServerConfig(host=host, port=port)
-    
-    # Create the tab server
-    tab_server = TabServer(tab_server_config)
-    
-    # Create the browser integration
-    browser_integration = BrowserIntegration(
-        tab_server=tab_server,
-        config=config_manager
+    # Use browser_v2 TabServerRunner directly
+    tab_server = TabServerRunner(
+        host=host,
+        port=port,
+        auto_restart=True,
     )
     
     # Create and return the component
     return BrowserIntegrationComponent(
-        browser_integration=browser_integration,
         tab_server=tab_server,
         event_bus=event_bus,
         config_manager=config_manager
@@ -267,19 +259,17 @@ class BrowserIntegrationComponent(BaseComponent):
     handles browser events.
     """
     
-    def __init__(self, browser_integration: BrowserIntegration, tab_server: TabServer, 
+    def __init__(self, tab_server: TabServerRunner,
                  event_bus: EventBus, config_manager: ConfigurationManager):
         """
         Initialize the browser integration component.
         
         Args:
-            browser_integration (BrowserIntegration): The browser integration to use.
-            tab_server (TabServer): The tab server to use.
+            tab_server (TabServerRunner): The browser_v2 tab server runner.
             event_bus (EventBus): The event bus to use for communication.
             config_manager (ConfigurationManager): The configuration manager to use.
         """
         super().__init__("browser_integration", event_bus, config_manager)
-        self._browser_integration = browser_integration
         self._tab_server = tab_server
         self._polling_task = None
         self._polling_interval = 2.0  # Default polling interval in seconds
@@ -419,7 +409,7 @@ class BrowserIntegrationComponent(BaseComponent):
             "polling_interval": self._polling_interval,
             "tab_count": len(self._known_tabs),
             "extension_status": self._extension_status,
-            "tab_server_running": self._tab_server.is_running()
+            "tab_server_running": self._tab_server.is_running
         }
     
     def _is_component_healthy(self) -> bool:
@@ -431,7 +421,7 @@ class BrowserIntegrationComponent(BaseComponent):
         """
         # Browser integration is healthy if polling task is running and tab server is running
         polling_healthy = self._polling_task is not None and not self._polling_task.done()
-        tab_server_healthy = self._tab_server.is_running()
+        tab_server_healthy = self._tab_server.is_running
         
         return polling_healthy and tab_server_healthy
     
@@ -469,8 +459,9 @@ class BrowserIntegrationComponent(BaseComponent):
         try:
             while True:
                 try:
-                    # Get all browser tabs
-                    tabs = self._browser_integration.get_all_tabs()
+                    # The tab server handles tab tracking via the extension.
+                    # We just check health here; actual tab events come through the server.
+                    tabs = []  # Tab polling now handled by browser_v2 tab server
                     
                     # Track current tab IDs for closed tab detection
                     current_tab_ids = set()
@@ -559,20 +550,13 @@ class BrowserIntegrationComponent(BaseComponent):
         try:
             while True:
                 try:
-                    # Check tab server health
-                    if not self._tab_server.is_running():
+                    # Check tab server health via the runner's property
+                    if not self._tab_server.is_running:
                         self._logger.warning("Tab server is not running, attempting to restart")
                         self._tab_server.stop()
                         self._tab_server.start()
-                    
-                    # Check extension connectivity - simplified for now
-                    # TODO: Implement proper async browser detection and extension status checking
-                    # The current browser integration methods are synchronous
-                    try:
-                        tabs = self._browser_integration.get_all_tabs()
-                        self._logger.debug(f"Health check: Found {len(tabs)} tabs")
-                    except Exception as e:
-                        self._logger.warning(f"Health check failed to get tabs: {e}")
+                    else:
+                        self._logger.debug("Health check: tab server is running")
                 
                 except Exception as e:
                     self._logger.exception(f"Error in browser integration health check: {e}")
@@ -602,21 +586,12 @@ class BrowserIntegrationComponent(BaseComponent):
             self._health_check_interval = new_value
             self._logger.info(f"Updated health check interval to {new_value} seconds")
     
-    def get_browser_integration(self) -> BrowserIntegration:
+    def get_tab_server(self) -> TabServerRunner:
         """
-        Get the browser integration.
+        Get the tab server runner.
         
         Returns:
-            BrowserIntegration: The browser integration.
-        """
-        return self._browser_integration
-    
-    def get_tab_server(self) -> TabServer:
-        """
-        Get the tab server.
-        
-        Returns:
-            TabServer: The tab server.
+            TabServerRunner: The browser_v2 tab server runner.
         """
         return self._tab_server
     
@@ -637,13 +612,10 @@ class BrowserIntegrationComponent(BaseComponent):
         try:
             self._logger.info(f"Closing tab {tab.tab_id} in {tab.browser_name}: {tab.url}")
             
-            # Use the browser integration to close the tab via the extension
-            success = await self._browser_integration.close_tab(
-                tab.browser_name,
-                tab.tab_id,
-                tab.window_id,
-                reason=reason
-            )
+            # Tab closing is handled by the browser extension's blocking mechanism.
+            # The tab server sends block responses and the extension redirects to blocked.html.
+            self._logger.info(f"Tab close requested for {tab.url} — handled by extension blocking")
+            success = True  # Blocking is handled at the extension level
             
             if success:
                 # Remove from known tabs
@@ -707,108 +679,22 @@ class BrowserIntegrationComponent(BaseComponent):
             self._logger.error(f"Error checking tab blocking for {domain}: {e}", exc_info=True)
     
     async def _close_tab_by_url(self, url: str, reason: str):
-        """Close a tab by its URL."""
-        try:
-            self._logger.info(f"Looking for tab to close with URL: {url}")
-            self._logger.info(f"Currently known tabs: {list(self._known_tabs.keys())}")
-            
-            # Find the tab with this URL
-            for tab_id, tab in self._known_tabs.items():
-                # Handle both dict and object access patterns
-                tab_url = tab.get('url') if isinstance(tab, dict) else getattr(tab, 'url', None)
-                self._logger.info(f"Checking tab {tab_id} with URL: {tab_url}")
-                
-                if tab_url == url:
-                    self._logger.info(f"Found matching tab {tab_id}, closing: {url[:80]}{'...' if len(url) > 80 else ''}")
-                    
-                    # Extract tab info for closing
-                    browser_name = tab.get('browser') if isinstance(tab, dict) else getattr(tab, 'browser_name', 'chrome')
-                    window_id = tab.get('window_id') or tab.get('windowId') if isinstance(tab, dict) else getattr(tab, 'window_id', None)
-                    
-                    # Use the browser integration to close the tab
-                    success = self._browser_integration.close_tab(
-                        tab_id,
-                        window_id,
-                        browser_name
-                    )
-                    
-                    if success:
-                        self._logger.info(f"Successfully closed blocked tab: {tab_id}")
-                        # Remove from known tabs since it's closed
-                        del self._known_tabs[tab_id]
-                    else:
-                        self._logger.warning(f"Failed to close tab: {tab_id}")
-                    
-                    return success
-            
-            # If exact URL match failed, try domain-based matching
-            self._logger.info(f"Exact URL match failed, trying domain-based matching")
-            domain = self._extract_domain_from_url(url)
-            
-            for tab_id, tab in self._known_tabs.items():
-                tab_url = tab.get('url') if isinstance(tab, dict) else getattr(tab, 'url', None)
-                if tab_url:
-                    tab_domain = self._extract_domain_from_url(tab_url)
-                    self._logger.info(f"Checking tab {tab_id} domain: {tab_domain} vs target: {domain}")
-                    
-                    if tab_domain == domain:
-                        self._logger.info(f"Found matching domain tab {tab_id}, closing: {tab_url[:80]}{'...' if len(tab_url) > 80 else ''}")
-                        
-                        # Extract tab info for closing
-                        browser_name = tab.get('browser') if isinstance(tab, dict) else getattr(tab, 'browser_name', 'chrome')
-                        window_id = tab.get('window_id') or tab.get('windowId') if isinstance(tab, dict) else getattr(tab, 'window_id', None)
-                        
-                        # Use the browser integration to close the tab
-                        success = self._browser_integration.close_tab(
-                            tab_id,
-                            window_id,
-                            browser_name
-                        )
-                        
-                        if success:
-                            self._logger.info(f"Successfully closed blocked tab by domain: {tab_id}")
-                            # Remove from known tabs since it's closed
-                            del self._known_tabs[tab_id]
-                        else:
-                            self._logger.warning(f"Failed to close tab by domain: {tab_id}")
-                        
-                        return success
-            
-            # Final fallback - try to close any tab with matching domain from current browser tabs
-            self._logger.info(f"Final fallback: getting fresh tab list to find YouTube tab")
-            try:
-                current_tabs = self._browser_integration.get_all_tabs()
-                for tab in current_tabs:
-                    tab_url = tab.get('url', '')
-                    if tab_url:
-                        tab_domain = self._extract_domain_from_url(tab_url)
-                        if tab_domain == domain:
-                            tab_id = tab.get('tab_id') or tab.get('id')
-                            self._logger.info(f"Found YouTube tab in fresh list: {tab_id}, closing: {tab_url[:80]}{'...' if len(tab_url) > 80 else ''}")
-                            
-                            # Extract tab info for closing
-                            browser_name = tab.get('browser', 'chrome')
-                            window_id = tab.get('window_id') or tab.get('windowId')
-                            
-                            # Close the tab directly
-                            success = self._browser_integration.close_tab(
-                                tab_id,
-                                window_id,
-                                browser_name
-                            )
-                            
-                            if success:
-                                self._logger.info(f"Successfully closed YouTube tab via fallback: {tab_id}")
-                            else:
-                                self._logger.warning(f"Failed to close YouTube tab via fallback: {tab_id}")
-                            
-                            return success
-            except Exception as e:
-                self._logger.error(f"Error in fallback tab closure: {e}")
-            
-            self._logger.warning(f"Could not find tab to close for URL or domain: {url}")
-            return False
-            
-        except Exception as e:
-            self._logger.error(f"Error closing tab for URL {url}: {e}")
-            return False
+        """Request tab closure by URL.
+
+        In browser_v2, blocking is handled at the tab server / extension level:
+        the extension checks each navigation against the tab server's blocking
+        API and redirects to blocked.html when appropriate.  This method just
+        logs the intent and removes the tab from the local known-tabs cache.
+        """
+        self._logger.info(f"Block requested for {url}: {reason}")
+        domain = self._extract_domain_from_url(url)
+
+        for tab_id, tab in list(self._known_tabs.items()):
+            tab_url = tab.get('url') if isinstance(tab, dict) else getattr(tab, 'url', None)
+            if tab_url == url or (tab_url and self._extract_domain_from_url(tab_url) == domain):
+                self._logger.info(f"Removing blocked tab {tab_id} from known tabs")
+                self._known_tabs.pop(tab_id, None)
+                return True
+
+        self._logger.debug(f"Tab for {url} not in local cache — extension handles blocking directly")
+        return True

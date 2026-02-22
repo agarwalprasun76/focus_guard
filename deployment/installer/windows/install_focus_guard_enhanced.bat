@@ -113,6 +113,42 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
+echo Admin Password Setup (Optional)
+echo ========================================
+echo.
+echo An admin password prevents the monitored user from changing
+echo the enforcement mode (e.g., disabling blocking).
+echo.
+set /p SETUP_PASSWORD="Set an admin password? (Y/N): "
+if /i "%SETUP_PASSWORD%"=="Y" (
+    python -c "
+import sys, hashlib, getpass
+sys.path.insert(0, '.')
+try:
+    pw = getpass.getpass('Enter admin password: ')
+    if len(pw) < 4:
+        print('Password must be at least 4 characters. Skipping.')
+        sys.exit(0)
+    pw2 = getpass.getpass('Confirm password: ')
+    if pw != pw2:
+        print('Passwords do not match. Skipping.')
+        sys.exit(0)
+    h = hashlib.sha256(pw.encode()).hexdigest()
+    from focus_guard.deployment.config import DeploymentConfig
+    config = DeploymentConfig.load()
+    config.config_password_hash = h
+    config.save()
+    print('Admin password set successfully.')
+except Exception as e:
+    print(f'Could not set password: {e}')
+    print('You can set it later with: focusguard set-password')
+"
+) else (
+    echo Skipped. You can set a password later with: focusguard set-password
+)
+
+echo.
+echo ========================================
 echo Installing Browser Extensions (Robust)...
 echo ========================================
 echo.
@@ -202,12 +238,14 @@ echo    - Desktop shortcut: "Focus Guard Tray"
 echo    - Or run: python -m focus_guard.gui.windows_tray
 echo.
 echo 3. Available CLI commands:
-echo    - focus-guard-cli start    (Start monitoring)
-echo    - focus-guard-cli stop     (Stop monitoring)
-echo    - focus-guard-cli status   (Show status)
-echo    - focus-guard-cli config   (Open configuration)
-echo    - focus-guard-cli test     (Run functionality test)
-echo    - focus-guard-cli demo     (Run interactive demo)
+echo    - focus-guard-cli start           (Start monitoring)
+echo    - focus-guard-cli stop            (Stop monitoring)
+echo    - focus-guard-cli status          (Show status)
+echo    - focus-guard-cli config          (Open configuration)
+echo    - focus-guard-cli set-password    (Set admin password)
+echo    - focus-guard-cli remove-password (Remove admin password)
+echo    - focus-guard-cli test            (Run functionality test)
+echo    - focus-guard-cli demo            (Run interactive demo)
 echo.
 echo 4. System Tray Features:
 echo    - Right-click tray icon for menu

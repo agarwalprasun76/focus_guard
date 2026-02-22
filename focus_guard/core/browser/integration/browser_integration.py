@@ -25,8 +25,33 @@ from focus_guard.core.utils.circuit_breaker import (
 
 from focus_guard.core.browser.interfaces import BrowserIntegrationInterface
 from focus_guard.core.browser.models.tab import Tab
-from focus_guard.core.browser.extension.tab_server import get_tab_server, start_tab_server, stop_tab_server
-from focus_guard.core.browser.extension.process_manager import get_tab_server_process_manager, start_tab_server_process
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_HOST
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_PORT
+from focus_guard.core.tab_server_endpoint import resolve_tab_server_base_url
+
+# Legacy tab_server and process_manager were removed in the browser_v2 migration.
+# Provide lightweight stubs so this module can still be imported without error.
+try:
+    from focus_guard.core.browser.extension.tab_server import get_tab_server, start_tab_server, stop_tab_server
+except ImportError:
+    def get_tab_server(*a, **kw):
+        return None
+    def start_tab_server(*a, **kw):
+        return False
+    def stop_tab_server(*a, **kw):
+        return False
+
+try:
+    from focus_guard.core.browser.extension.process_manager import get_tab_server_process_manager, start_tab_server_process
+except ImportError:
+    class _StubProcessManager:
+        def is_running(self): return False
+        def start(self): return False
+        def stop(self): return False
+    def get_tab_server_process_manager(*a, **kw):
+        return _StubProcessManager()
+    def start_tab_server_process(*a, **kw):
+        return False
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +59,7 @@ logger = logging.getLogger(__name__)
 class BrowserIntegration(BrowserIntegrationInterface):
     """Browser integration implementation that connects to the tab server."""
     
-    def __init__(self, tab_server_url: str = "http://localhost:5000", auto_start: bool = True, tab_server: Optional[Any] = None, config=None):
+    def __init__(self, tab_server_url: Optional[str] = None, auto_start: bool = True, tab_server: Optional[Any] = None, config=None):
         """Initialize the browser integration with improved lifecycle management.
         
         Args:
@@ -45,7 +70,7 @@ class BrowserIntegration(BrowserIntegrationInterface):
         """
         from focus_guard.core.browser.extension.interfaces import TabServerConfig
         
-        self._tab_server_url = tab_server_url
+        self._tab_server_url = tab_server_url or resolve_tab_server_base_url()
         self._last_update_time = 0
         self._cache_ttl = 1.0  # Cache tab data for 1 second
         self._tab_cache = []
@@ -59,15 +84,15 @@ class BrowserIntegration(BrowserIntegrationInterface):
             # Handle different config manager interfaces
             if hasattr(config, 'load_config'):
                 cfg = config.load_config()
-                tab_server_config.port = cfg.get('tab_server_port', 5000)
-                tab_server_config.host = cfg.get('tab_server_host', 'localhost')
+                tab_server_config.port = cfg.get('tab_server_port', DEFAULT_TAB_SERVER_PORT)
+                tab_server_config.host = cfg.get('tab_server_host', DEFAULT_TAB_SERVER_HOST)
             elif hasattr(config, 'get_value'):
-                tab_server_config.port = config.get_value('browser.tab_server.port', 5000)
-                tab_server_config.host = config.get_value('browser.tab_server.host', 'localhost')
+                tab_server_config.port = config.get_value('browser.tab_server.port', DEFAULT_TAB_SERVER_PORT)
+                tab_server_config.host = config.get_value('browser.tab_server.host', DEFAULT_TAB_SERVER_HOST)
             else:
                 # Fallback to defaults
-                tab_server_config.port = 5000
-                tab_server_config.host = 'localhost'
+                tab_server_config.port = DEFAULT_TAB_SERVER_PORT
+                tab_server_config.host = DEFAULT_TAB_SERVER_HOST
         
         self._tab_server = tab_server if tab_server is not None else get_tab_server(tab_server_config)
         # Initialize process manager with enhanced configuration

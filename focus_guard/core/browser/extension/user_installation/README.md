@@ -34,13 +34,13 @@ After installation, verify the extension is working:
 
 1. **Check Extension Status**:
    ```bash
-   curl http://127.0.0.1:5000/api/status
+   curl http://127.0.0.1:58392/api/status
    ```
    Should show `"extension_connected": true`
 
 2. **Check Tab Detection**:
    ```bash
-   curl http://127.0.0.1:5000/api/tabs
+   curl http://127.0.0.1:58392/api/tabs
    ```
    Should show your open tabs
 
@@ -52,7 +52,7 @@ After installation, verify the extension is working:
 ## Troubleshooting
 
 ### Extension Not Connecting
-- Ensure Focus Guard MVP is running (tab server on port 5000)
+- Ensure Focus Guard MVP is running (tab server on port 58392)
 - Check browser console for errors (F12 → Console)
 - Verify extension is enabled in browser settings
 

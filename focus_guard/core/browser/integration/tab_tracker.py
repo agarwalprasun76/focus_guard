@@ -13,6 +13,7 @@ from datetime import datetime
 
 from focus_guard.core.browser.interfaces import TabTrackerInterface
 from focus_guard.core.browser.models.tab import Tab, TabEvent
+from focus_guard.core.tab_server_endpoint import resolve_tab_server_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,13 @@ logger = logging.getLogger(__name__)
 class BrowserTabTracker(TabTrackerInterface):
     """Browser tab tracker implementation that integrates with browser extensions."""
     
-    def __init__(self, tab_server_url: str = "http://localhost:5000"):
+    def __init__(self, tab_server_url: Optional[str] = None):
         """Initialize the browser tab tracker.
         
         Args:
             tab_server_url: URL of the tab server
         """
-        self._tab_server_url = tab_server_url
+        self._tab_server_url = tab_server_url or resolve_tab_server_base_url()
         self._tabs: Dict[str, Tab] = {}  # Changed to use string IDs
         self._event_handlers = {event_type: [] for event_type in TabEvent}
         self._last_update_time = 0

@@ -44,7 +44,7 @@ def test_process_manager_timing():
         time.sleep(interval - (test_intervals[test_intervals.index(interval) - 1] if interval != test_intervals[0] else 0))
         
         try:
-            response = requests.get("http://localhost:5000/api/status", timeout=1.0)
+            response = requests.get("http://localhost:58392/api/status", timeout=1.0)
             if response.status_code == 200:
                 print(f"[OK] Server responding after {interval}s - Status: {response.status_code}")
                 data = response.json()

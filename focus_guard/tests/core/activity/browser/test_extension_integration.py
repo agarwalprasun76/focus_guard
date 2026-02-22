@@ -1,9 +1,16 @@
 """
-Unit tests for the BrowserExtensionIntegration class.
+DEPRECATED: These tests target the old BrowserIntegration-based API which no longer exists.
+The BrowserExtensionIntegration class was rewritten to use the browser_v2 tab server HTTP API
+(GET /api/tabs, POST /api/command). All 11 tests here mock non-existent classes/attributes
+(_tab_cache, _fallback_get_active_tab, BrowserIntegration).
 
-This module contains unit tests for the BrowserExtensionIntegration class defined in
-core.activity.browser.extension_integration.
+See browser_v2 tests for current coverage:
+  - focus_guard/tests/browser_v2/integration/test_tab_server.py
+  - focus_guard/tests/browser_v2/unit/test_api_models.py
 """
+
+import pytest
+pytestmark = pytest.mark.skip(reason="DEPRECATED: tests target old browser API replaced by browser_v2 tab server")
 
 import unittest
 from unittest.mock import patch, MagicMock, call
@@ -21,7 +28,7 @@ class TestBrowserExtensionIntegration(unittest.TestCase):
         self.mock_browser_integration = MagicMock()
         
         # Create BrowserExtensionIntegration with mock browser integration
-        with patch("core.activity.browser.extension_integration.BrowserIntegration", 
+        with patch("focus_guard.core.activity.browser.extension_integration.BrowserIntegration", 
                   return_value=self.mock_browser_integration):
             self.extension_integration = BrowserExtensionIntegration()
     
@@ -31,7 +38,7 @@ class TestBrowserExtensionIntegration(unittest.TestCase):
         extension_integration = BrowserExtensionIntegration()
         extension_integration._browser_integration = None
         
-        with patch("core.activity.browser.extension_integration.BrowserIntegration") as mock_browser_class:
+        with patch("focus_guard.core.activity.browser.extension_integration.BrowserIntegration") as mock_browser_class:
             mock_browser = MagicMock()
             mock_browser_class.return_value = mock_browser
             
@@ -250,7 +257,7 @@ class TestBrowserExtensionIntegration(unittest.TestCase):
     def test_fallback_get_active_tab(self):
         """Test _fallback_get_active_tab."""
         # Mock the platform-specific active window detection
-        with patch("core.activity.platform.get_platform_implementation") as mock_get_platform:
+        with patch("focus_guard.core.activity.platform.get_platform_implementation") as mock_get_platform:
             mock_platform = MagicMock()
             mock_get_platform.return_value = mock_platform
             
@@ -275,7 +282,7 @@ class TestBrowserExtensionIntegration(unittest.TestCase):
     def test_fallback_get_active_tab_no_browser(self):
         """Test _fallback_get_active_tab when active window is not a browser."""
         # Mock the platform-specific active window detection
-        with patch("core.activity.platform.get_platform_implementation") as mock_get_platform:
+        with patch("focus_guard.core.activity.platform.get_platform_implementation") as mock_get_platform:
             mock_platform = MagicMock()
             mock_get_platform.return_value = mock_platform
             

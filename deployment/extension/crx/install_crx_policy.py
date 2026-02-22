@@ -10,11 +10,18 @@ import winreg
 import subprocess
 from pathlib import Path
 
+# Ensure focus_guard package is importable when run as a standalone script
+_repo_root = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from focus_guard.core.extension_constants import CHROME_EXTENSION_ID
+
 class CRXPolicyInstaller:
     """Installs Focus Guard extension using Windows Registry policies."""
     
     def __init__(self):
-        self.extension_id = "hmjfbkppeejdnekjapejicmfhfogocjo"
+        self.extension_id = CHROME_EXTENSION_ID
         self.crx_dir = Path(__file__).parent
         self.crx_file = self.crx_dir / "FocusGuard_v1.0.0.crx"
         self.updates_xml = self.crx_dir / "updates.xml"

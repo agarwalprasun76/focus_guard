@@ -221,6 +221,10 @@ class TestUsageTracker:
         usage_tracker.track_activity(sample_window_info)
         first_session = usage_tracker.current_session
         
+        # Give the session meaningful duration so _end_current_session saves it
+        # (start_time must be far enough in the past so recalculated total_duration > 5s)
+        first_session.start_time = datetime.now() - timedelta(seconds=10)
+        
         # Create different window info
         different_window = WindowInfo(
             app_name="notepad.exe",
@@ -251,6 +255,9 @@ class TestUsageTracker:
         usage_tracker.track_activity(window1)
         first_session = usage_tracker.current_session
         
+        # Give the session meaningful duration so _end_current_session saves it
+        first_session.start_time = datetime.now() - timedelta(seconds=10)
+        
         # Create window info with different domain
         window2 = WindowInfo(
             app_name="chrome.exe",
@@ -271,6 +278,9 @@ class TestUsageTracker:
         """Test session timeout behavior."""
         usage_tracker.track_activity(sample_window_info)
         first_session = usage_tracker.current_session
+        
+        # Give the session meaningful duration so _end_current_session saves it
+        first_session.start_time = datetime.now() - timedelta(seconds=10)
         
         # Simulate time passing beyond timeout
         usage_tracker.last_activity_time = datetime.now() - timedelta(seconds=10)
@@ -324,8 +334,10 @@ class TestUsageTracker:
         # Start and end a session
         usage_tracker.track_activity(sample_window_info)
         
-        # Simulate meaningful session duration
+        # Simulate meaningful session duration (> 5s threshold in _end_current_session)
         usage_tracker.current_session.active_duration = 10.0
+        usage_tracker.current_session.total_duration = 10.0
+        usage_tracker.current_session.start_time = datetime.now() - timedelta(seconds=10)
         usage_tracker._end_current_session()
         
         # Verify callback was called
@@ -408,10 +420,14 @@ class TestUsageTracker:
         old_session = UsageSession("old.exe", "Old", start_time=now - timedelta(days=40))
         new_session = UsageSession("new.exe", "New", start_time=now - timedelta(days=10))
         
+        # Use dates relative to now so the 30-day cutoff works correctly
+        old_date = (now - timedelta(days=40)).strftime('%Y-%m-%d')
+        new_date = (now - timedelta(days=10)).strftime('%Y-%m-%d')
+        
         usage_tracker.completed_sessions = [old_session, new_session]
         usage_tracker.daily_summaries = {
-            "2023-12-01": DailyUsageSummary("2023-12-01"),
-            "2024-01-15": DailyUsageSummary("2024-01-15")
+            old_date: DailyUsageSummary(old_date),
+            new_date: DailyUsageSummary(new_date)
         }
         
         usage_tracker.clear_old_data(30)
@@ -419,8 +435,8 @@ class TestUsageTracker:
         # Should keep only new data
         assert len(usage_tracker.completed_sessions) == 1
         assert usage_tracker.completed_sessions[0] == new_session
-        assert "2023-12-01" not in usage_tracker.daily_summaries
-        assert "2024-01-15" in usage_tracker.daily_summaries
+        assert old_date not in usage_tracker.daily_summaries
+        assert new_date in usage_tracker.daily_summaries
     
     def test_is_browser_detection(self, usage_tracker):
         """Test browser detection."""

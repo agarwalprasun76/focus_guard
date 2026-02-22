@@ -179,13 +179,15 @@ class UsageTracker:
         """
         with self._lock:
             now = datetime.now()
-            self.last_activity_time = now
             
-            # Check if we need to start a new session
+            # Check if we need to start a new session (before updating last_activity_time
+            # so the timeout check uses the previous timestamp)
             if self._should_start_new_session(window_info):
                 if self.current_session:
                     self._end_current_session()
                 self._start_new_session(window_info, now)
+            
+            self.last_activity_time = now
             
             # Update current session if active
             if self.current_session and not self.idle_detector.is_idle():

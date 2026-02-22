@@ -2,6 +2,9 @@
 Domain blocking integration for browser extension.
 
 This module provides functionality for integrating domain blocking with the tab server.
+
+As of Section 7 consolidation, domain blocking rules are read from DomainConfigManager
+(domain_config.json) instead of ConfigurationManager.
 """
 
 import logging
@@ -12,10 +15,26 @@ from urllib.parse import urlparse
 from focus_guard.core.models import Category
 from focus_guard.core.config.interfaces import ConfigurationManager
 from focus_guard.core.browser.extension.interfaces import TabServerInterface
-from focus_guard.core.browser.extension.tab_server import get_tab_server
-from focus_guard.core.browser.extension.integration import get_extension_integration
+try:
+    from focus_guard.core.browser.extension.tab_server import get_tab_server
+except ImportError:
+    def get_tab_server(*a, **kw): return None
+
+try:
+    from focus_guard.core.browser.extension.integration import get_extension_integration
+except ImportError:
+    def get_extension_integration(*a, **kw): return None
 
 logger = logging.getLogger(__name__)
+
+
+def _get_domain_config_manager():
+    """Lazy import to avoid circular dependencies."""
+    try:
+        from focus_guard.core.domain.domain_config_manager import get_domain_config_manager
+        return get_domain_config_manager()
+    except Exception:
+        return None
 
 
 class DomainBlockingIntegration:
@@ -27,10 +46,9 @@ class DomainBlockingIntegration:
         """Initialize the domain blocking integration.
         
         Args:
-            config_manager: Configuration manager for domain settings
+            config_manager: Deprecated, ignored. Uses DomainConfigManager.
             tab_server: Tab server instance
         """
-        self._config_manager = config_manager
         self._tab_server = tab_server or get_tab_server()
         self._blocked_categories: Set[Category] = set()
         self._blocked_domains: Set[str] = set()
@@ -41,29 +59,42 @@ class DomainBlockingIntegration:
         self._update_blocking_rules()
     
     def _update_blocking_rules(self) -> None:
-        """Update the blocking rules from configuration."""
-        if not self._config_manager:
-            logger.warning("No configuration manager provided, using default blocking rules")
-            return
-            
+        """Update the blocking rules from DomainConfigManager."""
         try:
-            # Get blocked categories from configuration
-            blocked_categories = self._config_manager.get("focus.blocked_categories", [])
+            mgr = _get_domain_config_manager()
+            if mgr is None:
+                logger.warning("DomainConfigManager not available, using empty blocking rules")
+                return
+            
+            # Get blocked categories from DomainConfigManager
+            blocked_cat_names = mgr.get_blocked_categories()
             self._blocked_categories = set()
             
-            # Convert string categories to Category enum values using the mapping
+            # Convert string categories to Category enum values
             from focus_guard.core.models import CATEGORY_TO_ENUM_MAPPING
-            for category_str in blocked_categories:
-                if category_str in CATEGORY_TO_ENUM_MAPPING:
-                    self._blocked_categories.add(CATEGORY_TO_ENUM_MAPPING[category_str])
+            for cat_name in blocked_cat_names:
+                # Try direct enum match first
+                try:
+                    self._blocked_categories.add(Category[cat_name])
+                except KeyError:
+                    # Try mapping
+                    if cat_name.lower() in CATEGORY_TO_ENUM_MAPPING:
+                        self._blocked_categories.add(CATEGORY_TO_ENUM_MAPPING[cat_name.lower()])
             
-            # Get explicitly blocked domains
-            self._blocked_domains = set(self._config_manager.get("focus.blocked_domains", []))
+            # Get domains from blocked categories
+            self._blocked_domains = set()
+            from focus_guard.core.domain.domain_config_manager import CATEGORY_TO_ENUM
+            for cat, domains in mgr.get_domain_categories().items():
+                enum_cat = CATEGORY_TO_ENUM.get(cat, cat.upper())
+                if enum_cat in blocked_cat_names:
+                    for d in domains:
+                        self._blocked_domains.add(d.lower())
             
             # Update the last update time
             self._last_update_time = time.time()
             
-            logger.info(f"Updated blocking rules: {len(self._blocked_categories)} categories, "
+            logger.info(f"Updated blocking rules from DomainConfigManager: "
+                        f"{len(self._blocked_categories)} categories, "
                         f"{len(self._blocked_domains)} domains")
         except Exception as e:
             logger.error(f"Error updating blocking rules: {e}")
@@ -108,7 +139,7 @@ class DomainBlockingIntegration:
             return False
     
     def _get_domain_category(self, domain: str) -> Optional[Category]:
-        """Get the category for a domain.
+        """Get the category for a domain using DomainConfigManager.
         
         Args:
             domain: Domain to check
@@ -116,29 +147,25 @@ class DomainBlockingIntegration:
         Returns:
             Category: Category of the domain, or None if not categorized
         """
-        if not self._config_manager:
-            return None
-            
         try:
-            # Get domain classifications from configuration
-            domain_categories = self._config_manager.get("domain_classifications", {})
+            mgr = _get_domain_config_manager()
+            if mgr is None:
+                return None
             
-            # Check if domain is directly classified
-            if domain in domain_categories:
-                category_str = domain_categories[domain]
+            # Use DomainConfigManager's subdomain-aware lookup
+            cat_name = mgr.get_category_for_domain(domain)
+            if cat_name is None:
+                return None
+            
+            # Convert category name to Category enum
+            from focus_guard.core.domain.domain_config_manager import CATEGORY_TO_ENUM
+            enum_name = CATEGORY_TO_ENUM.get(cat_name, cat_name.upper())
+            
+            try:
+                return Category[enum_name]
+            except KeyError:
                 from focus_guard.core.models import CATEGORY_TO_ENUM_MAPPING
-                return CATEGORY_TO_ENUM_MAPPING.get(category_str)
-            
-            # Check for parent domains (e.g., example.com for sub.example.com)
-            parts = domain.split('.')
-            for i in range(1, len(parts) - 1):
-                parent_domain = '.'.join(parts[i:])
-                if parent_domain in domain_categories:
-                    category_str = domain_categories[parent_domain]
-                    from focus_guard.core.models import CATEGORY_TO_ENUM_MAPPING
-                    return CATEGORY_TO_ENUM_MAPPING.get(category_str)
-            
-            return None
+                return CATEGORY_TO_ENUM_MAPPING.get(cat_name.lower())
         except Exception as e:
             logger.error(f"Error getting domain category: {e}")
             return None

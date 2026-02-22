@@ -1,7 +1,8 @@
 # Focus Guard Edge Policy Installation
 # Run this PowerShell script as Administrator
 
-$ExtensionID = "hmjfbkppeejdnekjapejicmfhfogocjo"
+# Canonical source: focus_guard/core/extension_constants.py
+$ExtensionID = "hnpfnmlcmdhkbhnfifmnonehebeafclp"
 $UpdatesUrl = "https://your-domain.com/focusguard/updates.xml"
 
 Write-Host "Focus Guard Edge Policy Installation" -ForegroundColor Green

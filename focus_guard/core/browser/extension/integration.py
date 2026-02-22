@@ -10,12 +10,30 @@ import time
 from typing import Optional, Dict, Any, List
 
 from focus_guard.core.browser.models.browser import BrowserType
-from focus_guard.core.browser.extension.tab_server import get_tab_server, start_tab_server, stop_tab_server
-from focus_guard.core.browser.extension.process_manager import (
-    get_tab_server_process_manager,
-    start_tab_server_process,
-    stop_tab_server_process
-)
+from focus_guard.core.tab_server_endpoint import resolve_tab_server_base_url
+
+try:
+    from focus_guard.core.browser.extension.tab_server import get_tab_server, start_tab_server, stop_tab_server
+except ImportError:
+    def get_tab_server(*a, **kw): return None
+    def start_tab_server(*a, **kw): return False
+    def stop_tab_server(*a, **kw): return False
+
+try:
+    from focus_guard.core.browser.extension.process_manager import (
+        get_tab_server_process_manager,
+        start_tab_server_process,
+        stop_tab_server_process
+    )
+except ImportError:
+    class _StubPM:
+        def is_running(self): return False
+        def start(self): return False
+        def stop(self): return False
+    def get_tab_server_process_manager(*a, **kw): return _StubPM()
+    def start_tab_server_process(*a, **kw): return False
+    def stop_tab_server_process(*a, **kw): return False
+
 from focus_guard.core.browser.extension.manager import BrowserExtensionManager
 from focus_guard.core.browser.integration.browser_integration import BrowserIntegration
 
@@ -26,7 +44,7 @@ class ExtensionIntegration:
     """Integration class for browser extension components."""
     
     def __init__(self, 
-                 tab_server_url: str = "http://localhost:5000",
+                 tab_server_url: Optional[str] = None,
                  auto_start_tab_server: bool = True):
         """Initialize the extension integration.
         
@@ -34,14 +52,17 @@ class ExtensionIntegration:
             tab_server_url: URL of the tab server
             auto_start_tab_server: Whether to automatically start the tab server
         """
-        self._tab_server_url = tab_server_url
+        self._tab_server_url = tab_server_url or resolve_tab_server_base_url()
         self._auto_start = auto_start_tab_server
         
         # Initialize components
         self._process_manager = get_tab_server_process_manager()
         self._tab_server = get_tab_server()
-        self._extension_manager = BrowserExtensionManager(tab_server_url=tab_server_url)
-        self._browser_integration = BrowserIntegration(tab_server_url=tab_server_url, auto_start=auto_start_tab_server)
+        self._extension_manager = BrowserExtensionManager(tab_server_url=self._tab_server_url)
+        self._browser_integration = BrowserIntegration(
+            tab_server_url=self._tab_server_url,
+            auto_start=auto_start_tab_server,
+        )
         
         # Start the tab server if requested
         if auto_start_tab_server:

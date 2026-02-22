@@ -13,12 +13,19 @@ import winreg
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
+# Ensure focus_guard package is importable when run as a standalone script
+_repo_root = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from focus_guard.core.extension_constants import CHROME_EXTENSION_ID
+
 class BrowserExtensionInstaller:
     """Automated installer for Focus Guard browser extension."""
     
     def __init__(self):
         self.extension_dir = Path(__file__).parent.parent.parent.parent / "focus_guard" / "core" / "browser" / "extension" / "webextension_mv3"
-        self.extension_id = "hmjfbkppeejdnekjapejicmfhfogocjo"
+        self.extension_id = CHROME_EXTENSION_ID
         
     def detect_browsers(self) -> Dict[str, Optional[Path]]:
         """Detect installed browsers and their installation paths."""

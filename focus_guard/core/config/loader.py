@@ -320,7 +320,8 @@ class ConfigurationLoader:
                     "twitter.com",
                     "instagram.com",
                     "linkedin.com",
-                    "reddit.com"
+                    "reddit.com",
+                    "pronto.io"
                 ],
                 "entertainment": [
                     "youtube.com",

@@ -33,7 +33,7 @@ class TestActivityMonitor(unittest.TestCase):
         monitor = ActivityMonitor()
         monitor._platform_impl = None
         
-        with patch("core.activity.platform.get_platform_implementation") as mock_get_platform:
+        with patch("focus_guard.core.activity.platform.get_platform_implementation") as mock_get_platform:
             mock_impl = MagicMock()
             mock_get_platform.return_value = mock_impl
             
@@ -54,7 +54,7 @@ class TestActivityMonitor(unittest.TestCase):
         monitor = ActivityMonitor()
         monitor._browser_monitor = None
         
-        with patch("core.activity.browser.tab_monitor.BrowserTabMonitor") as mock_browser_monitor_class:
+        with patch("focus_guard.core.activity.browser.tab_monitor.BrowserTabMonitor") as mock_browser_monitor_class:
             mock_browser_monitor = MagicMock()
             mock_browser_monitor_class.return_value = mock_browser_monitor
             
@@ -127,12 +127,11 @@ class TestActivityMonitor(unittest.TestCase):
         }
         self.mock_browser_monitor.get_active_tab.return_value = browser_data
         
-        # Set up mock URL creation
-        with patch("core.activity.monitor.create_url_from_string") as mock_create_url:
-            mock_url = MagicMock()
-            mock_domain = MagicMock()
-            mock_url.domain = mock_domain
-            mock_create_url.return_value = mock_url
+        # Mock normalize_url and extract_domain_from_url (the actual functions used)
+        with patch("focus_guard.core.activity.monitor.normalize_url") as mock_normalize, \
+             patch("focus_guard.core.activity.monitor.extract_domain_from_url") as mock_extract_domain:
+            mock_normalize.return_value = "https://example.com/test"
+            mock_extract_domain.return_value = "example.com"
             
             # Call the method
             result = self.monitor.get_active_window()
@@ -141,13 +140,13 @@ class TestActivityMonitor(unittest.TestCase):
             self.assertIsInstance(result, WindowInfo)
             self.assertEqual(result.app_name, "chrome.exe")
             self.assertEqual(result.window_title, "Test Page - Google Chrome")
-            self.assertEqual(result.url, mock_url)
-            self.assertEqual(result.domain, mock_domain)
+            self.assertEqual(result.url, "https://example.com/test")
+            self.assertEqual(result.domain, "example.com")
             
             # Verify mock calls
             self.mock_platform_impl.get_active_window.assert_called_once()
             self.mock_browser_monitor.get_active_tab.assert_called_once()
-            mock_create_url.assert_called_once_with("https://example.com/test")
+            mock_normalize.assert_called_once_with("https://example.com/test")
     
     def test_get_active_window_browser_fallback(self):
         """Test get_active_window with browser window when browser integration fails."""
@@ -163,31 +162,29 @@ class TestActivityMonitor(unittest.TestCase):
         # Set up mock browser monitor to raise exception
         self.mock_browser_monitor.get_active_tab.side_effect = Exception("Browser integration failed")
         
-        # Set up mock URL extraction and creation
-        with patch.object(self.monitor, "_extract_url_from_title") as mock_extract_url:
+        # Mock URL extraction and the actual functions used in fallback path
+        with patch.object(self.monitor, "_extract_url_from_title") as mock_extract_url, \
+             patch("focus_guard.core.activity.monitor.normalize_url") as mock_normalize, \
+             patch("focus_guard.core.activity.monitor.extract_domain_from_url") as mock_extract_domain:
             mock_extract_url.return_value = "https://example.com/test"
+            mock_normalize.return_value = "https://example.com/test"
+            mock_extract_domain.return_value = "example.com"
             
-            with patch("core.activity.monitor.create_url_from_string") as mock_create_url:
-                mock_url = MagicMock()
-                mock_domain = MagicMock()
-                mock_url.domain = mock_domain
-                mock_create_url.return_value = mock_url
-                
-                # Call the method
-                result = self.monitor.get_active_window()
-                
-                # Verify the result
-                self.assertIsInstance(result, WindowInfo)
-                self.assertEqual(result.app_name, "chrome.exe")
-                self.assertEqual(result.window_title, "https://example.com/test - Google Chrome")
-                self.assertEqual(result.url, mock_url)
-                self.assertEqual(result.domain, mock_domain)
-                
-                # Verify mock calls
-                self.mock_platform_impl.get_active_window.assert_called_once()
-                self.mock_browser_monitor.get_active_tab.assert_called_once()
-                mock_extract_url.assert_called_once_with("https://example.com/test - Google Chrome")
-                mock_create_url.assert_called_once_with("https://example.com/test")
+            # Call the method
+            result = self.monitor.get_active_window()
+            
+            # Verify the result
+            self.assertIsInstance(result, WindowInfo)
+            self.assertEqual(result.app_name, "chrome.exe")
+            self.assertEqual(result.window_title, "https://example.com/test - Google Chrome")
+            self.assertEqual(result.url, "https://example.com/test")
+            self.assertEqual(result.domain, "example.com")
+            
+            # Verify mock calls
+            self.mock_platform_impl.get_active_window.assert_called_once()
+            self.mock_browser_monitor.get_active_tab.assert_called_once()
+            mock_extract_url.assert_called_once_with("https://example.com/test - Google Chrome")
+            mock_normalize.assert_called_once_with("https://example.com/test")
     
     def test_get_top_windows(self):
         """Test get_top_windows."""

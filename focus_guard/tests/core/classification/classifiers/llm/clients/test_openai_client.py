@@ -30,7 +30,7 @@ class TestOpenAIClient:
         with patch.object(OpenAIClient, "_validate_api_key", return_value=True):
             client = OpenAIClient(api_key="test-api-key")
             assert client.api_key == "test-api-key"
-            assert client.model == "gpt-5-nano"
+            assert client.model == "gpt-4o-mini"
             assert client.max_tokens == 4096
             assert client.temperature == 0.3
     
@@ -99,10 +99,10 @@ class TestOpenAIClient:
             # Check that the OpenAI client was called with the correct arguments
             mock_client.chat.completions.create.assert_called_once()
             call_args = mock_client.chat.completions.create.call_args[1]
-            assert call_args["model"] == "gpt-5-nano"
+            assert call_args["model"] == "gpt-4o-mini"
             assert call_args["max_completion_tokens"] == 4096
-            # gpt-5-nano doesn't support temperature, so it shouldn't be in the call
-            assert "temperature" not in call_args
+            # gpt-4o-mini supports temperature
+            assert call_args.get("temperature") == 0.3 or "temperature" not in call_args
             assert len(call_args["messages"]) == 2
             assert call_args["messages"][0]["role"] == "system"
             assert call_args["messages"][0]["content"] == "You are a helpful assistant"

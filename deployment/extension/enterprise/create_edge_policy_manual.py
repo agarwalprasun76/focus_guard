@@ -7,9 +7,16 @@ import sys
 import subprocess
 from pathlib import Path
 
+# Ensure focus_guard package is importable when run as a standalone script
+_repo_root = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from focus_guard.core.extension_constants import CHROME_EXTENSION_ID
+
 def create_edge_policy_manual():
     """Create Edge policy using REG command."""
-    extension_id = "hmjfbkppeejdnekjapejicmfhfogocjo"
+    extension_id = CHROME_EXTENSION_ID
     updates_url = "https://your-domain.com/focusguard/updates.xml"
     
     print("Manual Edge Policy Creation")

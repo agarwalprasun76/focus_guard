@@ -60,20 +60,13 @@ class MetadataFetcher:
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
                 # Reduce retry attempts to minimize error spam
-                'retries': 0,
+                'retries': 1,
                 'fragment_retries': 0,
-                # Suppress ALL output completely
-                'ignoreerrors': True,
+                # Don't ignore errors - we need the metadata even with warnings
+                'ignoreerrors': False,
                 'no_color': True,
                 'noprogress': True,
                 'logger': silent_logger,  # Use our custom silent logger
-                # Additional options to avoid 403 errors and SABR messages
-                'extractor_args': {
-                    'youtube': {
-                        'skip': ['dash', 'hls'],  # Skip problematic formats
-                        'player_skip': ['configs', 'webpage']  # Skip additional checks that cause SABR messages
-                    }
-                }
             }
             
             url = f"https://www.youtube.com/watch?v={video_id}"

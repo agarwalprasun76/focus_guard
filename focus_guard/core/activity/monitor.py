@@ -205,6 +205,20 @@ class ActivityMonitor:
         windows_data = self.platform_impl.get_top_windows(top_region)
         return [WindowInfo.from_dict(window_data) for window_data in windows_data]
     
+    def get_visible_windows(self) -> List[Dict[str, Any]]:
+        """
+        Get all visible windows on screen for comprehensive tracking.
+        
+        This returns raw dictionaries (not WindowInfo) for efficiency,
+        as this is called frequently for logging purposes.
+        
+        Returns:
+            List[Dict[str, Any]]: List of visible window dictionaries with
+                                  app_name, window_title, percent (screen coverage)
+        """
+        # Use a large top_region to get all windows
+        return self.platform_impl.get_top_windows(top_region=10000)
+    
     def create_activity_event(self, event_type: str, metadata: Dict[str, Any] = None) -> ActivityEvent:
         """
         Create an activity event with the current active window information.

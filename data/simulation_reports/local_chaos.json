@@ -1,0 +1,252 @@
+{
+  "seed": 20260214,
+  "dry_run": true,
+  "chaos": true,
+  "chaos_probability": 0.2,
+  "scenarios": [
+    "scenario_focus_stable",
+    "scenario_repeated_distraction",
+    "scenario_override_lifecycle",
+    "scenario_offline_recovery",
+    "scenario_long_session_stability"
+  ],
+  "total_errors": 3,
+  "total_chaos_injections": 3,
+  "results": [
+    {
+      "scenario": "scenario_focus_stable",
+      "events_total": 3,
+      "events_processed": 3,
+      "overrides_created": 0,
+      "overrides_revoked": 0,
+      "errors": 0,
+      "chaos_injections": 0,
+      "timeline": [
+        {
+          "step": 1,
+          "ok": true,
+          "action": "visit",
+          "domain": "wikipedia.org",
+          "note": null
+        },
+        {
+          "step": 2,
+          "ok": true,
+          "action": "visit",
+          "domain": "docs.python.org",
+          "note": null
+        },
+        {
+          "step": 3,
+          "ok": true,
+          "action": "check_state",
+          "domain": null,
+          "note": "stable-focus-state",
+          "state": {
+            "has_device": false,
+            "exceptions_count": 0
+          }
+        }
+      ],
+      "duration_ms": 0.01
+    },
+    {
+      "scenario": "scenario_repeated_distraction",
+      "events_total": 4,
+      "events_processed": 4,
+      "overrides_created": 0,
+      "overrides_revoked": 0,
+      "errors": 0,
+      "chaos_injections": 0,
+      "timeline": [
+        {
+          "step": 1,
+          "ok": true,
+          "action": "visit",
+          "domain": "youtube.com",
+          "note": null
+        },
+        {
+          "step": 2,
+          "ok": true,
+          "action": "visit",
+          "domain": "reddit.com",
+          "note": null
+        },
+        {
+          "step": 3,
+          "ok": true,
+          "action": "visit",
+          "domain": "youtube.com",
+          "note": null
+        },
+        {
+          "step": 4,
+          "ok": true,
+          "action": "check_state",
+          "domain": null,
+          "note": "repeated-distraction",
+          "state": {
+            "has_device": false,
+            "exceptions_count": 0
+          }
+        }
+      ],
+      "duration_ms": 0.01
+    },
+    {
+      "scenario": "scenario_override_lifecycle",
+      "events_total": 4,
+      "events_processed": 4,
+      "overrides_created": 1,
+      "overrides_revoked": 1,
+      "errors": 0,
+      "chaos_injections": 0,
+      "timeline": [
+        {
+          "step": 1,
+          "ok": true,
+          "action": "create_override",
+          "domain": "youtube.com",
+          "note": null,
+          "override_id": "sim_125"
+        },
+        {
+          "step": 2,
+          "ok": true,
+          "action": "visit",
+          "domain": "youtube.com",
+          "note": null
+        },
+        {
+          "step": 3,
+          "ok": true,
+          "action": "revoke_last_override",
+          "domain": "youtube.com",
+          "note": null
+        },
+        {
+          "step": 4,
+          "ok": true,
+          "action": "check_state",
+          "domain": null,
+          "note": "override-lifecycle",
+          "state": {
+            "has_device": false,
+            "exceptions_count": 0
+          }
+        }
+      ],
+      "duration_ms": 0.01
+    },
+    {
+      "scenario": "scenario_offline_recovery",
+      "events_total": 4,
+      "events_processed": 4,
+      "overrides_created": 0,
+      "overrides_revoked": 0,
+      "errors": 2,
+      "chaos_injections": 2,
+      "timeline": [
+        {
+          "step": 1,
+          "ok": true,
+          "action": "inject_offline",
+          "domain": null,
+          "note": "simulate-upstream-offline"
+        },
+        {
+          "step": 2,
+          "ok": false,
+          "action": "check_state",
+          "domain": null,
+          "note": "expect-degraded",
+          "error": "bounded chaos: simulated timeout"
+        },
+        {
+          "step": 3,
+          "ok": true,
+          "action": "clear_offline",
+          "domain": null,
+          "note": "recover-upstream"
+        },
+        {
+          "step": 4,
+          "ok": false,
+          "action": "check_state",
+          "domain": null,
+          "note": "expect-recovered",
+          "error": "bounded chaos: simulated timeout"
+        }
+      ],
+      "duration_ms": 0.01
+    },
+    {
+      "scenario": "scenario_long_session_stability",
+      "events_total": 7,
+      "events_processed": 7,
+      "overrides_created": 1,
+      "overrides_revoked": 1,
+      "errors": 1,
+      "chaos_injections": 1,
+      "timeline": [
+        {
+          "step": 1,
+          "ok": false,
+          "action": "visit",
+          "domain": "wikipedia.org",
+          "note": null,
+          "error": "bounded chaos: simulated timeout"
+        },
+        {
+          "step": 2,
+          "ok": true,
+          "action": "visit",
+          "domain": "youtube.com",
+          "note": null
+        },
+        {
+          "step": 3,
+          "ok": true,
+          "action": "create_override",
+          "domain": "youtube.com",
+          "note": null,
+          "override_id": "sim_6775"
+        },
+        {
+          "step": 4,
+          "ok": true,
+          "action": "visit",
+          "domain": "youtube.com",
+          "note": null
+        },
+        {
+          "step": 5,
+          "ok": true,
+          "action": "revoke_last_override",
+          "domain": "youtube.com",
+          "note": null
+        },
+        {
+          "step": 6,
+          "ok": true,
+          "action": "visit",
+          "domain": "docs.python.org",
+          "note": null
+        },
+        {
+          "step": 7,
+          "ok": true,
+          "action": "check_state",
+          "domain": null,
+          "note": "long-session-drift-check",
+          "state": {
+            "has_device": false,
+            "exceptions_count": 0
+          }
+        }
+      ],
+      "duration_ms": 0.01
+    }
+  ]
+}

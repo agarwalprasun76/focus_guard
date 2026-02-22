@@ -1,14 +1,15 @@
 @echo off
+REM Canonical source for Extension ID: focus_guard/core/extension_constants.py
 echo Focus Guard Edge Policy Installation
 echo ====================================
-echo Extension ID: hmjfbkppeejdnekjapejicmfhfogocjo
+echo Extension ID: hnpfnmlcmdhkbhnfifmnonehebeafclp
 echo.
 
 REM Create registry policy using REG command
 echo Creating Edge policy in registry...
 
 REM Try user-level first
-REG ADD "HKCU\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v "1" /t REG_SZ /d "hmjfbkppeejdnekjapejicmfhfogocjo;https://your-domain.com/focusguard/updates.xml" /f
+REG ADD "HKCU\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v "1" /t REG_SZ /d "hnpfnmlcmdhkbhnfifmnonehebeafclp;https://your-domain.com/focusguard/updates.xml" /f
 
 if %ERRORLEVEL% EQU 0 (
     echo SUCCESS: User-level policy created

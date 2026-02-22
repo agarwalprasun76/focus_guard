@@ -25,6 +25,17 @@ class DomainBlockingConfig(BlockingPolicyConfig):
         """Compile regex patterns after initialization."""
         self._compiled_patterns = [re.compile(pattern, re.IGNORECASE) 
                                  for pattern in self.regex_patterns]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the config to a dictionary for serialization."""
+        base_dict = super().to_dict()
+        base_dict.update({
+            "blocked_domains": list(self.blocked_domains),
+            "blocked_categories": [cat.name for cat in self.blocked_categories],
+            "allowlist": list(self.allowlist),
+            "regex_patterns": self.regex_patterns,
+        })
+        return base_dict
 
 
 class DomainBlockingPolicy(BlockingPolicy):
@@ -45,13 +56,21 @@ class DomainBlockingPolicy(BlockingPolicy):
         """Check if a domain is explicitly blocked."""
         domain_str = str(domain).lower()
         
-        # Check allowlist first (highest priority)
+        # Check allowlist first (highest priority) - including subdomain matching
         if domain_str in self._config.allowlist:
             return False
+        for allowed in self._config.allowlist:
+            if domain_str.endswith('.' + allowed):
+                return False
             
         # Check exact domain matches
         if domain_str in self._config.blocked_domains:
             return True
+        
+        # Check subdomain matches (e.g., www.facebook.com matches facebook.com)
+        for blocked in self._config.blocked_domains:
+            if domain_str.endswith('.' + blocked):
+                return True
             
         # Check domain patterns
         for pattern in self._config._compiled_patterns:
@@ -81,6 +100,11 @@ class DomainBlockingPolicy(BlockingPolicy):
         # Check exact matches first
         if domain_str in self._config.blocked_domains:
             return f"Domain '{domain_str}' is in the blocked domains list."
+        
+        # Check subdomain matches
+        for blocked in self._config.blocked_domains:
+            if domain_str.endswith('.' + blocked):
+                return f"Domain '{domain_str}' is a subdomain of blocked domain '{blocked}'."
             
         # Check patterns
         for pattern in self._config.regex_patterns:

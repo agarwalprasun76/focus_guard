@@ -55,10 +55,11 @@ python deployment/extension/enterprise/enterprise_deploy.py
 
 ## Extension Details
 
-- **Extension ID**: `hmjfbkppeejdnekjapejicmfhfogocjo`
-- **Version**: `1.0.0`
+- **Extension ID (Chrome)**: `hnpfnmlcmdhkbhnfifmnonehebeafclp`
+- **Extension ID (Edge)**: `legaalcjhhgofgpgbbpoadafdjllckgg`
+- **Version**: `1.0.1`
 - **Manifest Version**: `3`
-- **Permissions**: `tabs`, `storage`, `nativeMessaging`
+- **Permissions**: `tabs`, `alarms`, `declarativeNetRequest`
 
 ## Deployment Workflows
 

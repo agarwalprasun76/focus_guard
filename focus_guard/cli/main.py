@@ -132,6 +132,75 @@ def config(platform):
         click.echo(f"Error opening config: {e}", err=True)
 
 
+@cli.command('set-password')
+def set_password():
+    """Set the admin/parental password for protecting enforcement mode changes.
+
+    This password prevents the monitored user from weakening FocusGuard
+    (e.g., switching from 'enforcing' to 'tracking' mode) without authorization.
+    """
+    import hashlib
+
+    click.echo("FocusGuard Admin Password Setup")
+    click.echo("=" * 40)
+    click.echo()
+    click.echo("This password will be required to change the enforcement mode.")
+    click.echo("Choose a strong password that the monitored user does not know.")
+    click.echo()
+
+    password = click.prompt("Enter new admin password", hide_input=True)
+    if not password or len(password) < 4:
+        click.echo("Error: Password must be at least 4 characters.", err=True)
+        sys.exit(1)
+
+    confirm = click.prompt("Confirm password", hide_input=True)
+    if password != confirm:
+        click.echo("Error: Passwords do not match.", err=True)
+        sys.exit(1)
+
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    try:
+        from focus_guard.deployment.config import DeploymentConfig
+        config = DeploymentConfig.load()
+        config.config_password_hash = password_hash
+        config.save()
+        click.echo()
+        click.echo("Admin password set successfully.")
+        click.echo("Enforcement mode changes now require this password.")
+    except Exception as e:
+        click.echo(f"Error saving password: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command('remove-password')
+def remove_password():
+    """Remove the admin/parental password (requires current password)."""
+    import hashlib
+
+    try:
+        from focus_guard.deployment.config import DeploymentConfig
+        config = DeploymentConfig.load()
+
+        if not config.config_password_hash:
+            click.echo("No admin password is currently set.")
+            return
+
+        current = click.prompt("Enter current admin password", hide_input=True)
+        current_hash = hashlib.sha256(current.encode()).hexdigest()
+
+        if current_hash != config.config_password_hash:
+            click.echo("Error: Incorrect password.", err=True)
+            sys.exit(1)
+
+        config.config_password_hash = ""
+        config.save()
+        click.echo("Admin password removed. Enforcement mode changes no longer require a password.")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
 @cli.command()
 def version():
     """Show version information"""

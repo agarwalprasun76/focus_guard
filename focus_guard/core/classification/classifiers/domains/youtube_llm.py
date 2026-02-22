@@ -76,20 +76,27 @@ CONTENT_TYPES = ["video","channel","playlist","live","shorts","unknown"]
 
 def _infer_content_type(ctx: Dict[str, Any]) -> str:
     # Best-effort local inference to reduce LLM load
-    duration = (ctx.get("duration") or "").lower()
-    if isinstance(duration, str) and duration.startswith("pt"):  # ISO8601 like PT1M5S
-        # Rough parse: treat <= 70 seconds as shorts
-        try:
-            import re
-            m = re.findall(r'(\d+)M', duration)
-            minutes = int(m[0]) if m else 0
-            s = re.findall(r'(\d+)S', duration)
-            seconds = int(s[0]) if s else 0
-            total = minutes*60 + seconds
-            if total and total <= 70:
-                return "shorts"
-        except Exception:
-            pass
+    duration = ctx.get("duration")
+    
+    # Handle duration as integer (seconds) from yt-dlp
+    if isinstance(duration, (int, float)):
+        if duration and duration <= 70:
+            return "shorts"
+    elif isinstance(duration, str):
+        # Handle ISO8601 format like PT1M5S
+        duration_lower = duration.lower()
+        if duration_lower.startswith("pt"):
+            try:
+                import re
+                m = re.findall(r'(\d+)M', duration)
+                minutes = int(m[0]) if m else 0
+                s = re.findall(r'(\d+)S', duration)
+                seconds = int(s[0]) if s else 0
+                total = minutes*60 + seconds
+                if total and total <= 70:
+                    return "shorts"
+            except Exception:
+                pass
     if ctx.get("live_broadcast_content") == "live" or ctx.get("is_live"):
         return "live"
     return "unknown"

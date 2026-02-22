@@ -3,12 +3,32 @@ Domain constants and predefined configurations.
 
 This module defines constants and predefined configurations for domain
 categories, whitelists, and application domains.
+
+As of Section 7 consolidation, the canonical source of truth is
+DomainConfigManager (domain_config.json). The values below are kept as
+**fallback defaults** and are used only when the manager is unavailable.
 """
 
+import logging
 from typing import Dict, List, Set
 
-# Domain categories and their associated domains
-DOMAIN_CATEGORIES: Dict[str, List[str]] = {
+logger = logging.getLogger(__name__)
+
+
+def _get_manager():
+    """Lazy import to avoid circular dependencies."""
+    try:
+        from focus_guard.core.domain.domain_config_manager import get_domain_config_manager
+        return get_domain_config_manager()
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Fallback hardcoded values (used only when DomainConfigManager is unavailable)
+# ---------------------------------------------------------------------------
+
+_FALLBACK_DOMAIN_CATEGORIES: Dict[str, List[str]] = {
     "work": [
         "office.com", "slack.com", "zoom.us", "teams.microsoft.com",
         "github.com", "gitlab.com", "atlassian.com", "jira.com",
@@ -16,10 +36,10 @@ DOMAIN_CATEGORIES: Dict[str, List[str]] = {
         "google.com", "docs.google.com", "drive.google.com", "sheets.google.com",
         "calendar.google.com", "meet.google.com"
     ],
-    "social": [
+    "social_media": [
         "facebook.com", "twitter.com", "instagram.com", "linkedin.com",
         "reddit.com", "pinterest.com", "tiktok.com", "snapchat.com",
-        "whatsapp.com", "telegram.org", "discord.com"
+        "whatsapp.com", "telegram.org", "discord.com", "pronto.io"
     ],
     "entertainment": [
         "youtube.com", "netflix.com", "hulu.com", "disneyplus.com",
@@ -52,23 +72,42 @@ DOMAIN_CATEGORIES: Dict[str, List[str]] = {
     ]
 }
 
-# Always allowed domains (whitelist)
-DOMAIN_WHITELIST: Set[str] = {
-    # System domains
+_FALLBACK_WHITELIST: Set[str] = {
     "google.com", "gstatic.com", "googleapis.com", "microsoft.com",
     "apple.com", "mozilla.org", "mozilla.com", "mozilla.net",
     "windowsupdate.com", "microsoftonline.com", "live.com",
-    
-    # Common CDNs
     "cloudfront.net", "akamaihd.net", "akamaized.net", "cloudflare.com",
     "fastly.net", "cloudflare.net", "amazonaws.com",
-    
-    # Security/Updates
-    "windows.com", "microsoft.com", "windowsupdate.com", "office.com",
-    "office.net", "office365.com"
+    "windows.com", "office.com", "office.net", "office365.com"
 }
 
-# Application names and their associated domains
+
+# ---------------------------------------------------------------------------
+# Public API — reads from DomainConfigManager, falls back to hardcoded
+# ---------------------------------------------------------------------------
+
+def _get_domain_categories() -> Dict[str, List[str]]:
+    mgr = _get_manager()
+    if mgr:
+        return mgr.get_domain_categories()
+    return _FALLBACK_DOMAIN_CATEGORIES
+
+
+def _get_whitelist() -> Set[str]:
+    mgr = _get_manager()
+    if mgr:
+        return mgr.get_system_whitelist()
+    return _FALLBACK_WHITELIST
+
+
+# Module-level attributes for backward compatibility.
+# These are properties accessed via the module; callers that import
+# DOMAIN_CATEGORIES will get the live value at import time.
+# For truly dynamic access, callers should use get_domain_config_manager().
+DOMAIN_CATEGORIES: Dict[str, List[str]] = _get_domain_categories()
+DOMAIN_WHITELIST: Set[str] = _get_whitelist()
+
+# Application names and their associated domains (not domain-config-managed)
 APPLICATION_DOMAINS: Dict[str, List[str]] = {
     "browsers": [
         "chrome.exe", "firefox.exe", "msedge.exe", "safari.exe",
@@ -91,14 +130,17 @@ APPLICATION_DOMAINS: Dict[str, List[str]] = {
 # Category mapping to enum values
 CATEGORY_TO_ENUM_MAPPING: Dict[str, str] = {
     "work": "PRODUCTIVITY",
+    "social_media": "SOCIAL_MEDIA",
     "social": "SOCIAL_MEDIA",
     "entertainment": "ENTERTAINMENT",
+    "gaming": "GAMING",
     "shopping": "SHOPPING",
     "news": "NEWS",
     "email": "PRODUCTIVITY",
     "development": "TECHNOLOGY",
     "productivity": "PRODUCTIVITY",
-    "education": "EDUCATION"
+    "education": "EDUCATION",
+    "adult": "ADULT",
 }
 
 # Default configuration

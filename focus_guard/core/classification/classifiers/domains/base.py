@@ -1,10 +1,132 @@
 """
 Base interfaces for domain-specific classifiers."""
 
+import json
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Protocol, runtime_checkable
 
-from focus_guard.core.domain.models import Domain, Classification
+from focus_guard.core.domain.models import Domain, Category, Classification
+
+
+def clean_llm_json(text: str) -> str:
+    """Clean LLM response to extract JSON.
+    
+    Handles common LLM response patterns like code fences.
+    """
+    if text is None:
+        return "{}"
+    txt = text.strip()
+    if "```" in txt:
+        if "```json" in txt.lower():
+            try:
+                return txt.lower().split("```json", 1)[1].split("```", 1)[0].strip()
+            except Exception:
+                pass
+        try:
+            return txt.split("```", 1)[1].split("```", 1)[0].strip()
+        except Exception:
+            pass
+    return txt
+
+
+def parse_llm_classification_response(
+    response: str,
+    domain: Domain,
+    classifier_name: str,
+    categories: list,
+    usefulness_values: list,
+) -> Classification:
+    """Parse a standard LLM classification response into a Classification object.
+    
+    Args:
+        response: Raw LLM response string
+        domain: The domain being classified
+        classifier_name: Name of the classifier for metadata
+        categories: List of valid category strings
+        usefulness_values: List of valid usefulness strings
+        
+    Returns:
+        Classification object with parsed data in metadata
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if response is None:
+        return Classification(
+            domain=domain,
+            category=Category.UNKNOWN,
+            confidence=0.0,
+            metadata={
+                "classifier": classifier_name,
+                "usefulness": "NEUTRAL",
+                "reason": "LLM returned None response",
+            }
+        )
+    
+    try:
+        json_str = clean_llm_json(response)
+        data = json.loads(json_str)
+    except Exception as e:
+        logger.warning(f"JSON parse failed: {e}. Raw: {response[:500]}")
+        try:
+            json_str = json_str[json_str.find("{"): json_str.rfind("}") + 1]
+            data = json.loads(json_str)
+        except Exception as e2:
+            logger.error(f"Failed to parse LLM response: {e2}")
+            return Classification(
+                domain=domain,
+                category=Category.UNKNOWN,
+                confidence=0.0,
+                metadata={
+                    "classifier": classifier_name,
+                    "usefulness": "NEUTRAL",
+                    "reason": f"JSON parse failed: {e2}",
+                }
+            )
+    
+    # Validate category
+    cat = str(data.get("category", "")).upper()
+    if cat not in categories:
+        logger.warning(f"Invalid category '{cat}' from LLM")
+        cat = "UNKNOWN"
+    
+    # Map to Category enum
+    category_map = {
+        "EDUCATION": Category.EDUCATION,
+        "ENTERTAINMENT": Category.ENTERTAINMENT,
+        "SOCIAL_MEDIA": Category.SOCIAL_MEDIA,
+        "GAMING": Category.GAMING,
+        "NEWS": Category.NEWS,
+        "SHOPPING": Category.SHOPPING,
+        "PRODUCTIVITY": Category.PRODUCTIVITY,
+        "ADULT": Category.ADULT,
+        "MALICIOUS": Category.MALICIOUS,
+        "UNKNOWN": Category.UNKNOWN,
+    }
+    category = category_map.get(cat, Category.UNKNOWN)
+    
+    # Validate usefulness
+    usefulness = str(data.get("usefulness", "")).upper()
+    if usefulness not in usefulness_values:
+        usefulness = "NEUTRAL"
+    
+    # Parse confidence
+    try:
+        confidence = float(data.get("confidence", 0.7))
+        confidence = max(0.0, min(1.0, confidence))
+    except (ValueError, TypeError):
+        confidence = 0.7
+    
+    return Classification(
+        domain=domain,
+        category=category,
+        confidence=confidence,
+        metadata={
+            "classifier": classifier_name,
+            "usefulness": usefulness,
+            "reason": data.get("reason", ""),
+        }
+    )
 
 @runtime_checkable
 class DomainClassifier(Protocol):

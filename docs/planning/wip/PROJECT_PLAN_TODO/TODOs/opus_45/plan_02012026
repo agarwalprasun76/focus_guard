@@ -1,0 +1,209 @@
+Review Summary & Brainstorm for Next Steps [This was planned on 01/26/2026]
+Current State Assessment
+Domain Module (@C:\Users\prasun_agarwal\focus_guard\focus_guard\core\domain\)
+Strengths:
+
+Well-structured with Domain, URL, Category, Classification models
+Good validation and normalization utilities
+Hybrid approach: enum-based categories + dictionary-based config + mapping layer
+IDN support, edge case handling
+Gaps for Agent-Based Vision:
+
+Static category definitions - Categories are hardcoded enums (SOCIAL_MEDIA, ENTERTAINMENT, etc.)
+No content-type awareness - Domain module doesn't distinguish between different content types on the same domain
+No learning/evolution mechanism - Rules are fixed, not adaptive
+Classification Module (@C:\Users\prasun_agarwal\focus_guard\focus_guard\core\classification\)
+Strengths:
+
+Excellent architecture - Protocol-based design with sync/async flexibility
+Pipeline pattern - Classifiers chain together, first non-None wins
+YouTube as exemplar - Shows the right thinking:
+RuleBasedYouTubeClassifier for fast, cheap decisions
+LLMBasedYouTubeClassifier for nuanced content analysis
+Composite YouTubeClassifier tries LLM first, falls back to rules
+Context-aware classification - classify_with_context() takes URL, title, description, channel, etc.
+Caching - Multi-level cache, background refresh, YouTube video/channel-specific keys
+Usefulness dimension - LLM classifier distinguishes category (EDUCATION) from usefulness (EDUCATIONAL vs DISTRACTION)
+Gaps:
+
+YouTube-only - Only YouTube has domain-specific classifiers; other domains use generic DomainCategoryClassifier
+No screen/visual classification - Current system only sees URLs/titles, not actual screen content
+No temporal/behavioral context - Doesn't consider "user has been on entertainment for 2 hours"
+No rule evolution - Rules are static, no feedback loop to improve them
+YouTube Classification Thinking (Key Insights)
+The YouTube classifiers embody the right philosophy:
+
+Layered approach: Rules → LLM → Fallback
+Content-type awareness: Distinguishes /watch?v=, /shorts/, /channel/, homepage
+Usefulness vs Category: A video can be GAMING category but EDUCATIONAL usefulness (e.g., "Coding in Minecraft")
+Context-rich prompts: LLM gets title, channel, description, duration, view count, etc.
+Heuristic priors: Pre-compute hints like "likely_entertainment" before LLM call
+Graceful degradation: If LLM fails, fall back to rules; if rules fail, default to UNKNOWN (allow)
+Vision: Agent-Based Smart Classification
+Your vision is an agent watching the screen that:
+
+Understands what's happening on screen (not just URL/title)
+Determines if it's useful or distracting in context
+Takes appropriate action (block, log, alert)
+Evolves rules based on observations
+Architecture for This Vision
+┌─────────────────────────────────────────────────────────────────┐
+│                    OBSERVATION LAYER                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Screen Capture  │  Browser Tab  │  Active Window  │  Audio     │
+│  (periodic)      │  (URL/title)  │  (app/title)    │  (optional)│
+└────────┬─────────┴───────┬───────┴────────┬────────┴────────────┘
+         │                 │                │
+         ▼                 ▼                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    CONTEXT BUILDER                              │
+│  - Current activity context (what's on screen)                  │
+│  - Temporal context (how long, patterns)                        │
+│  - User intent context (declared task/goal)                     │
+│  - Historical context (past behavior on this domain)            │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    CLASSIFICATION PIPELINE                       │
+├─────────────────────────────────────────────────────────────────┤
+│  1. FAST RULES (< 10ms)                                         │
+│     - Whitelist/blacklist domains                               │
+│     - URL pattern matching                                      │
+│     - Known domain categories                                   │
+│                                                                 │
+│  2. DOMAIN-SPECIFIC CLASSIFIERS (< 100ms)                       │
+│     - YouTube: title/channel/content-type analysis              │
+│     - Reddit: subreddit classification                          │
+│     - Twitter/X: content type detection                         │
+│     - News sites: article vs homepage                           │
+│                                                                 │
+│  3. LLM CLASSIFIER (< 2s, cached)                               │
+│     - Rich context prompt                                       │
+│     - Category + Usefulness + Confidence                        │
+│     - Reasoning for transparency                                │
+│                                                                 │
+│  4. VISUAL CLASSIFIER (optional, < 5s)                          │
+│     - Screen capture analysis                                   │
+│     - For ambiguous cases                                       │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    DECISION ENGINE                              │
+│  - Combines classification with user's current task/goal        │
+│  - Applies time budgets and override limits                     │
+│  - Considers temporal patterns (break time? focus session?)     │
+│  - Outputs: ALLOW / WARN / BLOCK / LOG                          │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    RULE EVOLUTION                               │
+│  - Feedback from user actions (override, dismiss)               │
+│  - Periodic rule refinement based on patterns                   │
+│  - LLM-assisted rule generation from observations               │
+└─────────────────────────────────────────────────────────────────┘
+Brainstorm: Next Steps
+Option A: Extend YouTube Pattern to Other Domains
+Effort: Medium (1-2 weeks)
+Impact: High for common distracting sites
+
+Create domain-specific classifiers for:
+
+Reddit - Classify by subreddit (r/programming = productive, r/memes = distraction)
+Twitter/X - Classify by content type (news feed vs specific profile vs trending)
+News sites - Classify by article topic (tech news = maybe productive, celebrity gossip = distraction)
+Streaming - Netflix/Twitch/etc. (almost always entertainment)
+Implementation:
+
+classifiers/domains/
+├── youtube_*.py      # ✅ Already done
+├── reddit_rules.py   # NEW
+├── reddit_llm.py     # NEW
+├── twitter_rules.py  # NEW
+├── news_rules.py     # NEW
+└── streaming.py      # NEW (simple, mostly entertainment)
+Option B: Generic URL-Path Classifier
+Effort: Low-Medium (3-5 days)
+Impact: Medium - covers many sites without domain-specific code
+
+Instead of domain-specific classifiers, create a generic URL-path analyzer:
+
+/watch, /video, /play → likely video content
+/article, /post, /blog → likely reading content
+/search, /results → browsing/navigation
+/shorts, /reels, /stories → short-form content (usually distracting)
+/learn, /course, /tutorial → educational
+Combine with title analysis for better accuracy.
+
+Option C: Screen Capture + Vision LLM
+Effort: High (2-4 weeks)
+Impact: Very High - true "agent watching screen"
+
+Periodically capture screen and send to vision LLM:
+
+"Is this screen showing productive work or distraction?"
+"What is the user doing right now?"
+Works for any application, not just browser
+Challenges:
+
+Privacy concerns (screen capture)
+Cost (vision API calls)
+Latency (can't block in real-time)
+Local LLM option needed for privacy
+Use case: Background monitoring + logging, not real-time blocking
+
+Option D: Rule Evolution System
+Effort: Medium (1-2 weeks)
+Impact: High for long-term intelligence
+
+Build a feedback loop:
+
+Log all classifications with context
+Track user overrides (user said "this is productive" when we said "distraction")
+Periodic analysis - LLM reviews logs and suggests rule updates
+Rule versioning - Track rule changes over time
+Example flow:
+
+User overrides block on "youtube.com/watch?v=xyz" (title: "Python Tutorial")
+→ System logs: "User marked EDUCATION, we said ENTERTAINMENT"
+→ Weekly analysis: "User frequently overrides for 'tutorial' in title"
+→ Suggested rule: "Add 'tutorial' to education_keywords"
+→ User approves → Rule updated
+Option E: Integration with Override System (from last session)
+Effort: Low (2-3 days)
+Impact: Medium - connects classification to blocking
+
+Connect the classification pipeline to the override/blocking system you just built:
+
+DomainUsageTracker.check_can_override() should call classification pipeline
+Different budgets per content type:
+YouTube EDUCATION: 60 min/day
+YouTube ENTERTAINMENT: 15 min/day
+YouTube GAMING: 10 min/day
+Override penalties based on content type:
+EDUCATION override: no penalty
+ENTERTAINMENT override: 60s penalty
+GAMING override: 120s penalty
+Recommended Priority Order
+Priority	Option	Why
+1	E: Integration with Override System	Connects existing work, immediate value
+2	A: Reddit/Twitter classifiers	High-impact sites, follows proven YouTube pattern
+3	D: Rule Evolution	Long-term intelligence, makes system smarter over time
+4	B: Generic URL-Path Classifier	Covers many sites without domain-specific code
+5	C: Screen Capture	Most powerful but highest effort/complexity
+Concrete Next Steps
+Immediate (This Session)
+Design the integration point between classification and DomainUsageTracker/OverrideManager
+Define content-type-aware rules - how should budgets/penalties differ by classification?
+Sketch Reddit classifier as next domain-specific example
+Short-term (Next 1-2 Sessions)
+Implement classification → blocking integration
+Build Reddit classifier (rules + LLM)
+Add content-type to override API responses
+Medium-term
+Rule evolution system
+More domain-specific classifiers
+Generic URL-path classifier
+What direction would you like to explore? I'd suggest starting with Option E (Integration) since it builds directly on the override work from last session and provides immediate value.

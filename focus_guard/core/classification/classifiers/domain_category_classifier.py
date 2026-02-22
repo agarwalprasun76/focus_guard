@@ -1,15 +1,25 @@
 """
 Domain category classifier that maps domains to categories using configuration.
+
+As of Section 7 consolidation, domain categories are read from DomainConfigManager
+(domain_config.json) instead of app_config.json.
 """
 
-import json
 import logging
-import os
 from typing import Dict, Any, Optional, List
 
 from focus_guard.core.domain.models import Domain, Category, Classification
 
 logger = logging.getLogger(__name__)
+
+
+def _get_domain_config_manager():
+    """Lazy import to avoid circular dependencies."""
+    try:
+        from focus_guard.core.domain.domain_config_manager import get_domain_config_manager
+        return get_domain_config_manager()
+    except Exception:
+        return None
 
 
 class DomainCategoryClassifier:
@@ -19,12 +29,11 @@ class DomainCategoryClassifier:
         """Initialize the domain category classifier.
         
         Args:
-            config_path: Optional path to app config file
+            config_path: Deprecated, ignored. Uses DomainConfigManager.
             name: Name of the classifier
         """
         self._name = name
-        self._config_path = config_path or self._get_default_config_path()
-        self._domain_categories = {}
+        self._domain_categories: Dict[str, str] = {}
         self._load_domain_categories()
     
     @property
@@ -32,47 +41,26 @@ class DomainCategoryClassifier:
         """Get the classifier name."""
         return self._name
     
-    def _get_default_config_path(self) -> str:
-        """Get the default path to app config file."""
-        # Look for app_config.json in the config directory
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up to focus_guard root, then to config
-        config_dir = os.path.join(current_dir, "..", "..", "..", "..", "config")
-        config_path = os.path.join(config_dir, "app_config.json")
-        return os.path.normpath(config_path)
-    
     def _load_domain_categories(self):
-        """Load domain categories from configuration."""
+        """Load domain categories from DomainConfigManager."""
         try:
-            logger.info(f"Loading domain categories from: {self._config_path}")
-            
-            if not os.path.exists(self._config_path):
-                logger.error(f"Config file not found: {self._config_path}")
+            mgr = _get_domain_config_manager()
+            if mgr is None:
+                logger.warning("DomainConfigManager not available, using empty domain mappings")
+                self._domain_categories = {}
                 return
             
-            with open(self._config_path, 'r') as f:
-                config = json.load(f)
-            
-            # Get distraction categories from app config
-            distraction_categories = config.get("distraction_categories", {})
-            logger.info(f"Raw distraction_categories from config: {distraction_categories}")
+            # Get all domain categories from the unified config
+            categories = mgr.get_domain_categories()
+            logger.debug(f"Loaded {len(categories)} categories from DomainConfigManager")
             
             # Build reverse mapping: domain -> category
-            for category_name, domains in distraction_categories.items():
-                logger.info(f"Processing category '{category_name}' with domains: {domains}")
+            for category_name, domains in categories.items():
                 for domain in domains:
-                    # Clean domain (remove protocols, paths, etc.)
                     clean_domain = domain.lower().strip()
-                    if clean_domain.startswith(('http://', 'https://')):
-                        clean_domain = clean_domain.split('://', 1)[1]
-                    if '/' in clean_domain:
-                        clean_domain = clean_domain.split('/', 1)[0]
-                    
                     self._domain_categories[clean_domain] = category_name
-                    logger.info(f"Mapped domain '{clean_domain}' -> '{category_name}'")
             
-            logger.info(f"Loaded {len(self._domain_categories)} domain mappings")
-            logger.info(f"Domain mappings: {self._domain_categories}")
+            logger.info(f"Loaded {len(self._domain_categories)} domain mappings from DomainConfigManager")
             
         except Exception as e:
             logger.error(f"Failed to load domain categories: {e}", exc_info=True)
@@ -106,17 +94,17 @@ class DomainCategoryClassifier:
                 }
             )
         
-        # Check if domain contains any of the mapped domains
+        # Check subdomain match (e.g., stanfordohs.pronto.io matches pronto.io)
         for mapped_domain, category_name in self._domain_categories.items():
-            if mapped_domain in domain_value or domain_value in mapped_domain:
+            if domain_value.endswith('.' + mapped_domain):
                 category = self._map_category_name(category_name)
                 
                 return Classification(
                     domain=domain,
                     category=category,
-                    confidence=0.8,
+                    confidence=0.85,
                     metadata={
-                        'method': 'domain_category_partial_match',
+                        'method': 'domain_category_subdomain_match',
                         'matched_domain': mapped_domain,
                         'config_category': category_name,
                         'classifier': self.name

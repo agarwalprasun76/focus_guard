@@ -8,6 +8,13 @@ import os
 import sys
 from pathlib import Path
 
+# Ensure focus_guard package is importable when run as a standalone script
+_repo_root = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from focus_guard.core.extension_constants import CHROME_EXTENSION_ID
+
 def main():
     """Main function with CRX installation instructions."""
     crx_file = Path(__file__).parent / "FocusGuard_v1.0.0.crx"
@@ -39,11 +46,11 @@ def main():
     print()
     print("For Chrome:")
     print('New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist" -Force')
-    print(f'New-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist" -Name "1" -Value "hmjfbkppeejdnekjapejicmfhfogocjo;file:///{crx_file.as_posix()}" -PropertyType String -Force')
+    print(f'New-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist" -Name "1" -Value "{CHROME_EXTENSION_ID};file:///{crx_file.as_posix()}" -PropertyType String -Force')
     print()
     print("For Edge:")
     print('New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist" -Force')
-    print(f'New-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist" -Name "1" -Value "hmjfbkppeejdnekjapejicmfhfogocjo;file:///{crx_file.as_posix()}" -PropertyType String -Force')
+    print(f'New-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist" -Name "1" -Value "{CHROME_EXTENSION_ID};file:///{crx_file.as_posix()}" -PropertyType String -Force')
     print()
     print("3. Restart browser and wait 1-2 minutes")
     print()

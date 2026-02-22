@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Blocked - FocusGuard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .container {
+            text-align: center;
+            padding: 40px;
+            max-width: 600px;
+        }
+
+        .icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 30px;
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 40px rgba(233, 69, 96, 0.4);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .icon svg {
+            width: 60px;
+            height: 60px;
+            fill: white;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #e94560;
+            text-shadow: 0 2px 10px rgba(233, 69, 96, 0.3);
+        }
+
+        .domain {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px 24px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: inline-block;
+            word-break: break-all;
+        }
+
+        .message {
+            font-size: 1.2rem;
+            color: #a0a0a0;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .reason {
+            font-size: 1rem;
+            color: #e94560;
+            font-weight: 500;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: rgba(233, 69, 96, 0.1);
+            border-radius: 8px;
+            border-left: 4px solid #e94560;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #a0a0a0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        .btn-override {
+            background: transparent;
+            color: #666;
+            font-size: 0.85rem;
+            padding: 10px 20px;
+            margin-top: 20px;
+        }
+
+        .btn-override:hover {
+            color: #e94560;
+        }
+
+        .warning-text {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .warning-text.visible {
+            display: block;
+        }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 0.85rem;
+            color: #555;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        /* Personalized Banner */
+        .personal-banner {
+            margin-bottom: 20px;
+        }
+
+        .greeting {
+            font-size: 1.3rem;
+            color: #667eea;
+            font-weight: 600;
+            padding: 12px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        /* Focus Stats Row */
+        .focus-stats-row {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .focus-stat {
+            text-align: center;
+            min-width: 90px;
+        }
+
+        .focus-stat-icon {
+            font-size: 1.8rem;
+            margin-bottom: 4px;
+        }
+
+        .focus-stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .focus-stat-label {
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        /* Focus Score Ring */
+        .focus-score-ring {
+            position: relative;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 4px;
+        }
+
+        .score-svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .score-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 3;
+        }
+
+        .score-fg {
+            fill: none;
+            stroke: #4caf50;
+            stroke-width: 3;
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.6s ease, stroke 0.3s ease;
+        }
+
+        .score-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        /* Motivational Quote */
+        .motivational-quote {
+            font-size: 1rem;
+            color: #b0b0b0;
+            font-style: italic;
+            margin-bottom: 20px;
+            padding: 14px 20px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 10px;
+            border-left: 3px solid #667eea;
+            text-align: left;
+            line-height: 1.5;
+        }
+
+        .quote-icon {
+            margin-right: 8px;
+            font-style: normal;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: left;
+        }
+
+        .stats-header {
+            font-size: 0.9rem;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .stat-value.warning {
+            color: #ffc107;
+        }
+
+        .stat-value.danger {
+            color: #e94560;
+        }
+
+        .stat-value.success {
+            color: #4caf50;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .stats-detail {
+            margin-top: 15px;
+            font-size: 0.85rem;
+            color: #888;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stats-detail.hidden {
+            display: none;
+        }
+
+        .penalty-info {
+            color: #ffc107;
+            font-size: 0.8rem;
+            margin-top: 8px;
+        }
+
+        /* Override confirmation modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: #1a1a2e;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 450px;
+            text-align: center;
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+
+        .modal h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+        }
+
+        .modal p {
+            color: #a0a0a0;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .modal .warning {
+            background: rgba(233, 69, 96, 0.1);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #e94560;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Personalized Greeting -->
+        <div id="personalBanner" class="personal-banner" style="display:none;">
+            <div class="greeting" id="greeting"></div>
+        </div>
+
+        <div class="icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-2h2v2h-2zm0-4V7h2v6h-2z"/>
+            </svg>
+        </div>
+
+        <h1>Site Blocked</h1>
+        
+        <div class="domain" id="blockedDomain">example.com</div>
+        
+        <!-- Focus Stats Row: Streak + Focus Score + Blocks -->
+        <div id="focusStatsRow" class="focus-stats-row" style="display:none;">
+            <div class="focus-stat" id="streakStat">
+                <div class="focus-stat-icon">&#x1F525;</div>
+                <div class="focus-stat-value" id="streakValue">0</div>
+                <div class="focus-stat-label">Day Streak</div>
+            </div>
+            <div class="focus-stat" id="scoreStat">
+                <div class="focus-score-ring">
+                    <svg viewBox="0 0 36 36" class="score-svg">
+                        <path class="score-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path class="score-fg" id="scoreArc" stroke-dasharray="75, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div class="score-text" id="scoreText">75</div>
+                </div>
+                <div class="focus-stat-label">Focus Score</div>
+            </div>
+            <div class="focus-stat" id="blocksStat">
+                <div class="focus-stat-icon">&#x1F6E1;&#xFE0F;</div>
+                <div class="focus-stat-value" id="blocksValue">0</div>
+                <div class="focus-stat-label">Blocks Today</div>
+            </div>
+        </div>
+
+        <!-- Motivational Quote -->
+        <div id="motivationalQuote" class="motivational-quote" style="display:none;">
+            <span class="quote-icon">&#x1F4AC;</span>
+            <span id="quoteText"></span>
+        </div>
+
+        <p class="message">
+            <strong>This domain is blocked because it is considered a distraction.</strong>
+        </p>
+        
+        <div class="reason" id="blockReason">
+            FocusGuard is helping you stay productive by blocking distracting websites.
+        </div>
+
+        <!-- Master Distraction Budget Panel -->
+        <div class="stats-panel" id="masterBudgetPanel">
+            <div class="stats-header">📊 Total Distraction Time Today</div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="masterRemaining">--</div>
+                    <div class="stat-label">Time Remaining</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="masterUsed">--</div>
+                    <div class="stat-label">Time Used</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="masterLimit">--</div>
+                    <div class="stat-label">Daily Limit</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="masterSites">--</div>
+                    <div class="stat-label">Sites Visited</div>
+                </div>
+            </div>
+            <!-- Progress bar -->
+            <div class="progress-container" style="margin-top: 15px;">
+                <div class="progress-bar" id="masterProgressBar" style="width: 0%; height: 8px; background: linear-gradient(90deg, #4caf50, #ffc107, #e94560); border-radius: 4px; transition: width 0.3s;"></div>
+            </div>
+            <div class="progress-label" id="masterProgressLabel" style="font-size: 0.8rem; color: #888; margin-top: 5px; text-align: center;">0% of daily limit used</div>
+            
+            <!-- Sites visited list -->
+            <div class="sites-list" id="sitesListContainer" style="margin-top: 15px; display: none;">
+                <div class="sites-header" style="font-size: 0.85rem; color: #667eea; margin-bottom: 10px; cursor: pointer;" onclick="toggleSitesList()">
+                    ▼ Distraction sites visited today
+                </div>
+                <div class="sites-items" id="sitesList" style="max-height: 150px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Per-Domain Usage Stats Panel -->
+        <div class="stats-panel" id="statsPanel">
+            <div class="stats-header">📍 This Domain's Usage</div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="statRemainingTime">--</div>
+                    <div class="stat-label">Time Remaining</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statEffectiveTime">--</div>
+                    <div class="stat-label">Effective Time Used</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statOverrides">--</div>
+                    <div class="stat-label">Overrides Used</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statBudget">--</div>
+                    <div class="stat-label">Domain Budget</div>
+                </div>
+            </div>
+            <div class="stats-detail" id="statsDetail"></div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" id="goBackBtn">Go Back</button>
+            <a href="about:blank" class="btn btn-secondary">New Tab</a>
+            <button class="btn btn-secondary" id="saveForLaterBtn" title="Save this link to view during your break">
+                📌 Save for Later
+            </button>
+        </div>
+
+        <!-- Save for Later form (hidden by default) -->
+        <div id="saveForLaterForm" style="display:none; margin-top: 15px; background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 10px; padding: 16px; text-align: left;">
+            <p style="font-size: 0.9rem; color: #667eea; font-weight: 600; margin-bottom: 10px;">📌 Save this link for later</p>
+            <p style="font-size: 0.8rem; color: #888; margin-bottom: 12px;">Add an optional note about why you want to visit this site. You can view saved links from the dashboard during your break.</p>
+            <textarea id="saveLinkComment" placeholder="e.g., Need to check this for homework..." style="width: 100%; min-height: 60px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #fff; padding: 10px; font-size: 0.9rem; resize: vertical; font-family: inherit;"></textarea>
+            <div style="display: flex; gap: 10px; margin-top: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" id="cancelSaveBtn" style="padding: 8px 16px; font-size: 0.85rem;">Cancel</button>
+                <button class="btn btn-primary" id="confirmSaveBtn" style="padding: 8px 16px; font-size: 0.85rem;">Save Link</button>
+            </div>
+        </div>
+        <div id="saveFeedback" style="display:none; margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 0.9rem; text-align: center;"></div>
+
+        <button class="btn btn-override" id="overrideBtn">
+            I need to access this site anyway →
+        </button>
+        
+        <p class="warning-text" id="warningText">
+            ⚠️ Override requests are logged and may be reported.
+        </p>
+
+        <!-- Saved Links Badge -->
+        <div id="savedLinksBadge" style="display:none; margin-top: 15px; padding: 10px 16px; background: rgba(102, 126, 234, 0.08); border: 1px solid rgba(102, 126, 234, 0.2); border-radius: 8px; font-size: 0.85rem; color: #667eea;">
+            📌 You have <strong id="savedLinksCount">0</strong> saved link(s) waiting.
+            <span style="color: #888; margin-left: 6px;">View them from the system tray → Settings or open</span>
+            <a href="#" id="openSavedLinksLink" style="margin-left: 4px; color: #8aa5ff; font-weight: 600; text-decoration: underline;">Saved Links</a>
+            <span style="color: #888;">in the admin dashboard.</span>
+        </div>
+
+        <div class="footer">
+            <p>Protected by <a href="#">FocusGuard</a></p>
+        </div>
+    </div>
+
+    <!-- Override Confirmation Modal -->
+    <div class="modal-overlay" id="overrideModal">
+        <div class="modal">
+            <h2>⚠️ Override Block?</h2>
+            <p>You're about to bypass the block for this site. Are you sure you need to access it?</p>
+            <div class="warning">
+                <strong>Warning:</strong> This action will be logged and an email notification may be sent to your accountability partner or parent.
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                <button class="btn btn-primary" id="proceedBtn" style="background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);">
+                    Proceed Anyway
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="blocked.js"></script>
+</body>
+</html>

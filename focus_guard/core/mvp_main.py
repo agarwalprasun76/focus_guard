@@ -1,5 +1,8 @@
 """
-Focus Guard MVP Main Entry Point
+Focus Guard MVP Main Entry Point (LEGACY)
+
+DEPRECATED: Use focus_guard/main.py instead for the unified entry point.
+This file is kept for backward compatibility with the CLI and dev workflows.
 
 This script provides a simple entry point for the Focus Guard MVP that uses
 the existing full coordinator system with all components.
@@ -7,17 +10,23 @@ the existing full coordinator system with all components.
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional
 
-# Configure logging
+# Configure logging — use rotating handler to avoid unbounded log growth
+from logging.handlers import RotatingFileHandler as _RFH
+
+_log_dir = Path(os.environ.get('PROGRAMDATA', r'C:\ProgramData')) / 'FocusGuard' / 'logs'
+_log_dir.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('focus_guard_mvp.log')
+        _RFH(str(_log_dir / 'focus_guard_mvp.log'), maxBytes=10*1024*1024, backupCount=3),
     ]
 )
 
@@ -26,57 +35,34 @@ logger = logging.getLogger("focus_guard.mvp")
 # Import Focus Guard components
 from focus_guard.core.config.manager import DefaultConfigurationManager
 from focus_guard.core.coordinator.focus_guard_coordinator import FocusGuardCoordinator
-from focus_guard.core.browser.extension.installer import ExtensionInstaller
+from focus_guard.core.tab_server_endpoint import resolve_tab_server_endpoint
 
 
-async def setup_extension() -> bool:
+async def setup_tab_server() -> bool:
     """
-    Set up browser extension and tab server with auto-installation.
+    Start the browser_v2 tab server (HTTP API for the browser extension).
     
     Returns:
-        bool: True if setup successful, False otherwise
+        bool: True if tab server started successfully, False otherwise
     """
     try:
-        logger.info("Setting up browser extension...")
-        installer = ExtensionInstaller()
-        
-        # First, try to start the tab server (checks if extension is already working)
-        if installer.ensure_tab_server_running():
-            logger.info("Extension is already working - tab server started successfully")
-            return True
-        
-        # If tab server failed, try to install the extension
-        logger.info("Tab server failed to start - attempting extension installation...")
-        
-        try:
-            # Attempt automatic extension installation
-            success = installer.install_extension()
-            if success:
-                logger.info("Extension installation completed")
-                
-                # Wait a moment for installation to complete
-                import asyncio
-                await asyncio.sleep(2)
-                
-                # Try starting tab server again
-                if installer.ensure_tab_server_running():
-                    logger.info("Extension installation successful - tab server is now running")
-                    return True
-                else:
-                    logger.warning("Extension installed but tab server still not responding")
-                    return False
-            else:
-                logger.warning("Automatic extension installation failed")
-                logger.info("Manual extension installation may be required")
-                return False
-                
-        except Exception as install_error:
-            logger.warning(f"Extension installation error: {install_error}")
-            logger.info("Continuing without extension - some features may be limited")
-            return False
-            
+        from focus_guard.core.browser_v2.tab_server.runner import TabServerRunner
+
+        host, port = resolve_tab_server_endpoint()
+        logger.info("Starting tab server on port %d...", port)
+        runner = TabServerRunner(
+            host=host,
+            port=port,
+            auto_restart=True,
+        )
+        success = runner.start()
+        if success:
+            logger.info("Tab server started successfully")
+        else:
+            logger.warning("Tab server failed to start — browser extension won't connect")
+        return success
     except Exception as e:
-        logger.error(f"Error setting up extension: {e}")
+        logger.error(f"Error starting tab server: {e}")
         return False
 
 
@@ -94,10 +80,10 @@ async def main() -> int:
         logger.info("Initializing configuration manager...")
         config_manager = DefaultConfigurationManager()
         
-        # Set up browser extension
-        extension_ready = await setup_extension()
-        if not extension_ready:
-            logger.warning("Browser extension not ready - some features may not work")
+        # Start tab server for browser extension communication
+        tab_server_ready = await setup_tab_server()
+        if not tab_server_ready:
+            logger.warning("Tab server not ready - browser extension features may not work")
         
         # Create Focus Guard coordinator
         logger.info("Creating Focus Guard coordinator...")

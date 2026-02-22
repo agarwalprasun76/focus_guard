@@ -1,7 +1,8 @@
 # Focus Guard Extension Deployment Script
 # Generated automatically
 
-$ExtensionID = "hmjfbkppeejdnekjapejicmfhfogocjo"
+# Canonical source: focus_guard/core/extension_constants.py
+$ExtensionID = "hnpfnmlcmdhkbhnfifmnonehebeafclp"
 $CrxUrl = "https://your-domain.com/focusguard/FocusGuard.crx"
 $UpdatesUrl = "https://your-domain.com/focusguard/updates.xml"
 $Version = "1.0.0"

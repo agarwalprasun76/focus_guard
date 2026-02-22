@@ -10,11 +10,18 @@ import subprocess
 import time
 from pathlib import Path
 
+# Ensure focus_guard package is importable when run as a standalone script
+_repo_root = str(Path(__file__).resolve().parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from focus_guard.core.extension_constants import CHROME_EXTENSION_ID
+
 class FinalExtensionInstaller:
     """Final reliable extension installer using unpacked approach."""
     
     def __init__(self):
-        self.extension_id = "hmjfbkppeejdnekjapejicmfhfogocjo"
+        self.extension_id = CHROME_EXTENSION_ID
         self.extension_dir = Path(__file__).parent.parent.parent / "focus_guard" / "core" / "browser" / "extension" / "webextension_mv3"
         
     def find_chrome_path(self):

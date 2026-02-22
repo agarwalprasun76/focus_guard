@@ -35,7 +35,7 @@ class BrowserExtensionTroubleshooter:
         
         try:
             # Test tab server connectivity
-            response = requests.get("http://127.0.0.1:5000/api/status", timeout=5)
+            response = requests.get("http://127.0.0.1:58392/api/status", timeout=5)
             if response.status_code == 200:
                 logger.info("✅ Tab server is running and accessible")
                 return True

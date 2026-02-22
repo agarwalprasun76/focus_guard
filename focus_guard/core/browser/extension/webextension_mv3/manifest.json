@@ -1,23 +1,33 @@
 {
   "manifest_version": 3,
-  "name": "FocusGuard Tab Watcher (MV3)",
-  "version": "1.0.0",
-  "description": "Streams the list of open tabs to FocusGuard and blocks distracting content.",
-  "permissions": ["tabs", "nativeMessaging", "alarms", "webRequest", "declarativeNetRequest"],
+  "name": "FocusGuard - Productivity & Time Manager",
+  "version": "1.0.1",
+  "description": "Track browsing time, block distractions, and stay focused. Smart content classification with customizable time budgets.",
+  "permissions": ["tabs", "alarms", "declarativeNetRequest"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_icon": { "16": "icons/empty16_connected.png" }
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "FocusGuard - Click for status"
   },
   "icons": {
-    "16": "icons/empty16_connected.png",
-    "32": "icons/empty16_connected.png"
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
-  "incognito": "split",
-  "externally_connectable": {
-    "ids": ["apnmgllhphjajigkjlakkkpinbmjgghk"]
-  }
+  "web_accessible_resources": [{
+    "resources": ["blocked.html", "blocked.js"],
+    "matches": ["<all_urls>"]
+  }],
+  "incognito": "split"
 }
 

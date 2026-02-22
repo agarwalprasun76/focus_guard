@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Canonical source for extension ID: focus_guard/core/extension_constants.py -->
 <gupdate xmlns="http://www.google.com/update2/response" protocol="2.0">
-  <app appid="hmjfbkppeejdnekjapejicmfhfogocjo">
+  <app appid="hnpfnmlcmdhkbhnfifmnonehebeafclp">
     <updatecheck codebase="file:///C:/Users/prasun_agarwal/focus_guard/deployment/extension/crx/FocusGuard_v1.0.0.crx" version="1.0.0"/>
   </app>
 </gupdate>

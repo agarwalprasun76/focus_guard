@@ -1,11 +1,41 @@
 """
 Windows Configuration Module for Focus Guard MVP
 Simple JSON-based configuration management for Windows
+
+As of Section 7 consolidation, blocked_domains are read from DomainConfigManager
+(domain_config.json) instead of being hardcoded here.
 """
 import json
+import logging
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+def _get_blocked_domains_from_manager() -> List[str]:
+    """Get blocked domains from DomainConfigManager."""
+    try:
+        from focus_guard.core.domain.domain_config_manager import (
+            get_domain_config_manager,
+            CATEGORY_TO_ENUM,
+        )
+        mgr = get_domain_config_manager()
+        blocked_cats = mgr.get_blocked_categories()
+        domains = []
+        for cat, cat_domains in mgr.get_domain_categories().items():
+            enum_cat = CATEGORY_TO_ENUM.get(cat, cat.upper())
+            if enum_cat in blocked_cats:
+                domains.extend(cat_domains)
+        return domains
+    except Exception as e:
+        logger.debug(f"Could not get blocked domains from DomainConfigManager: {e}")
+        # Fallback to hardcoded defaults
+        return [
+            "facebook.com", "youtube.com", "twitter.com", "instagram.com",
+            "tiktok.com", "reddit.com", "netflix.com", "twitch.tv"
+        ]
 
 
 class WindowsConfig:
@@ -24,20 +54,14 @@ class WindowsConfig:
     
     @property
     def default_config(self) -> Dict[str, Any]:
-        """Default Windows configuration"""
+        """Default Windows configuration.
+        
+        Note: blocked_domains are loaded from DomainConfigManager when available.
+        """
         return {
             "monitoring_enabled": True,
             "check_interval": 30,
-            "blocked_domains": [
-                "facebook.com",
-                "youtube.com",
-                "twitter.com",
-                "instagram.com",
-                "tiktok.com",
-                "reddit.com",
-                "netflix.com",
-                "twitch.tv"
-            ],
+            "blocked_domains": _get_blocked_domains_from_manager(),
             "allowed_apps": [
                 "notepad.exe",
                 "chrome.exe",
@@ -142,7 +166,11 @@ class WindowsConfig:
         return str(self.config_path)
     
     def create_config_template(self) -> str:
-        """Create configuration template for user editing"""
+        """Create configuration template for user editing.
+        
+        Note: Blocked domains are now managed via DomainConfigManager
+        (C:\\ProgramData\\FocusGuard\\domain_config.json).
+        """
         template = """# Focus Guard Windows Configuration
 # Edit this file to customize your experience
 
@@ -150,13 +178,9 @@ class WindowsConfig:
 monitoring_enabled: true
 check_interval: 30  # seconds between checks
 
-# Blocked domains (websites to block)
-blocked_domains:
-  - facebook.com
-  - youtube.com
-  - twitter.com
-  - instagram.com
-  - reddit.com
+# Blocked domains are now managed centrally in:
+# C:\\ProgramData\\FocusGuard\\domain_config.json
+# Use the Settings dialog or API to modify blocked domains.
 
 # Allowed applications (these won't be blocked)
 allowed_apps:

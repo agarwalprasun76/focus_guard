@@ -31,6 +31,17 @@ class BlockingPolicyConfig:
     enabled: bool = True
     priority: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the config to a dictionary for serialization."""
+        return {
+            "type": self.policy_type.value,
+            "name": self.name,
+            "description": self.description,
+            "enabled": self.enabled,
+            "priority": self.priority,
+            "metadata": self.metadata,
+        }
 
 
 T = TypeVar('T', bound='BlockingPolicy')

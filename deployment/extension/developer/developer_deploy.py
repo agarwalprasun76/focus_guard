@@ -8,6 +8,13 @@ import subprocess
 import time
 from pathlib import Path
 
+# Ensure focus_guard package is importable when run as a standalone script
+_repo_root = str(Path(__file__).resolve().parent.parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from focus_guard.core.extension_constants import CHROME_EXTENSION_ID
+
 def find_edge_executable():
     """Find Microsoft Edge executable."""
     possible_paths = [
@@ -23,7 +30,7 @@ def find_edge_executable():
 
 def load_extension_in_edge():
     """Load extension in Edge developer mode."""
-    extension_id = "hmjfbkppeejdnekjapejicmfhfogocjo"
+    extension_id = CHROME_EXTENSION_ID
     extension_path = Path(__file__).parent.parent.parent.parent / "focus_guard" / "core" / "browser" / "extension" / "webextension_mv3"
     
     print("Focus Guard Extension Loader")

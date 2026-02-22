@@ -26,6 +26,7 @@ from focus_guard.core.activity.browser.enhanced_domain_blocker import (
 )
 from focus_guard.core.browser.integration.browser_integration import BrowserIntegration
 from focus_guard.core.browser.models.tab import Tab
+from focus_guard.core.tab_server_endpoint import resolve_tab_server_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ class ComprehensiveActivitySystem:
         
         # Initialize Phase 3: Browser integration
         self.browser_integration = BrowserIntegration(
-            tab_server_url=self.config.get('tab_server_url', 'http://localhost:5000'),
+            tab_server_url=self.config.get('tab_server_url', resolve_tab_server_base_url()),
             auto_start=self.config.get('auto_start_tab_server', True)
         )
         

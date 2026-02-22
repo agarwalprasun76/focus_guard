@@ -85,8 +85,9 @@ deployment/installer/scripts/install_extension_automated.py
 - **Testing utilities**: VM creation and deployment verification
 
 ## Extension Details
-- **Extension ID**: hmjfbkppeejdnekjapejicmfhfogocjo
-- **Version**: 1.0.0
+- **Extension ID (Chrome)**: hnpfnmlcmdhkbhnfifmnonehebeafclp
+- **Extension ID (Edge)**: legaalcjhhgofgpgbbpoadafdjllckgg
+- **Version**: 1.0.1
 - **Manifest**: v3
 
 See individual component README files for detailed usage instructions.

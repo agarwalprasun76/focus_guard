@@ -1,7 +1,8 @@
 # Focus Guard Extension - Admin Installation Script
 # Automatically installs extension policies for Chrome and Edge
 
-$ExtensionID = "hmjfbkppeejdnekjapejicmfhfogocjo"
+# Canonical source: focus_guard/core/extension_constants.py
+$ExtensionID = "hnpfnmlcmdhkbhnfifmnonehebeafclp"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $CrxFile = Join-Path $ScriptDir "FocusGuard_v1.0.0.crx"
 $UpdatesXml = Join-Path $ScriptDir "updates.xml"

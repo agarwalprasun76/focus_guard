@@ -17,8 +17,20 @@ from typing import Dict, Optional, List, Any
 
 from focus_guard.core.browser.interfaces import ExtensionManagerInterface
 from focus_guard.core.browser.models.browser import BrowserType
-from focus_guard.core.browser.extension.tab_server import get_tab_server
-from focus_guard.core.browser.extension.process_manager import get_tab_server_process_manager
+from focus_guard.core.tab_server_endpoint import resolve_tab_server_base_url
+try:
+    from focus_guard.core.browser.extension.tab_server import get_tab_server
+except ImportError:
+    def get_tab_server(*a, **kw): return None
+
+try:
+    from focus_guard.core.browser.extension.process_manager import get_tab_server_process_manager
+except ImportError:
+    class _StubPM:
+        def is_running(self): return False
+        def start(self): return False
+        def stop(self): return False
+    def get_tab_server_process_manager(*a, **kw): return _StubPM()
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +38,7 @@ logger = logging.getLogger(__name__)
 class BrowserExtensionManager(ExtensionManagerInterface):
     """Browser extension manager implementation."""
     
-    def __init__(self, extension_dir: str = None, tab_server_url: str = "http://localhost:5000"):
+    def __init__(self, extension_dir: str = None, tab_server_url: Optional[str] = None):
         """Initialize the browser extension manager.
         
         Args:
@@ -34,7 +46,7 @@ class BrowserExtensionManager(ExtensionManagerInterface):
             tab_server_url: URL of the tab server
         """
         self._extension_dir = extension_dir or self._get_default_extension_dir()
-        self._tab_server_url = tab_server_url
+        self._tab_server_url = tab_server_url or resolve_tab_server_base_url()
         self._installed_extensions: Dict[BrowserType, bool] = {}
         
         # Extension IDs are typically derived from the extension's public key
@@ -159,7 +171,7 @@ class BrowserExtensionManager(ExtensionManagerInterface):
         
         # Fall back to HTTP API if direct access fails
         try:
-            tab_server_url = "http://localhost:5000"  # Default tab server URL
+            tab_server_url = self._tab_server_url
             start_time = time.time()
             
             while time.time() - start_time < timeout_seconds:
@@ -198,14 +210,14 @@ class BrowserExtensionManager(ExtensionManagerInterface):
         if system == "Windows":
             # Windows browser detection
             chrome_paths = [
-                os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Google\Chrome\Application\chrome.exe"),
-                os.path.join(os.environ.get("ProgramFiles", ""), "Google\Chrome\Application\chrome.exe"),
-                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google\Chrome\Application\chrome.exe")
+                os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Google\\Chrome\\Application\\chrome.exe"),
+                os.path.join(os.environ.get("ProgramFiles", ""), "Google\\Chrome\\Application\\chrome.exe"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google\\Chrome\\Application\\chrome.exe")
             ]
             
             edge_paths = [
-                os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Microsoft\Edge\Application\msedge.exe"),
-                os.path.join(os.environ.get("ProgramFiles", ""), "Microsoft\Edge\Application\msedge.exe")
+                os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Microsoft\\Edge\\Application\\msedge.exe"),
+                os.path.join(os.environ.get("ProgramFiles", ""), "Microsoft\\Edge\\Application\\msedge.exe")
             ]
             
             for path in chrome_paths:

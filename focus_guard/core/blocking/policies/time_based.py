@@ -60,6 +60,16 @@ class TimeBasedBlockingConfig(BlockingPolicyConfig):
                 return True
                 
         return False
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the config to a dictionary for serialization."""
+        base_dict = super().to_dict()
+        base_dict.update({
+            "time_ranges": self.time_ranges,
+            "days_of_week": list(self.days_of_week),
+            "timezone": self.timezone,
+        })
+        return base_dict
 
 
 class TimeBasedBlockingPolicy(BlockingPolicy):

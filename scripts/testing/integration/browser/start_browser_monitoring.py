@@ -77,9 +77,9 @@ def test_browser_extension_connectivity():
     try:
         # Test API endpoints
         endpoints = [
-            "http://localhost:5000/api/status",
-            "http://localhost:5000/api/command",
-            "http://localhost:5000/api/tabs"
+            "http://localhost:58392/api/status",
+            "http://localhost:58392/api/command",
+            "http://localhost:58392/api/tabs"
         ]
         
         for endpoint in endpoints:

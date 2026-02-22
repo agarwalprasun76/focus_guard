@@ -12,6 +12,9 @@ from typing import Dict, Any, Optional, Callable, List, Awaitable
 from aiohttp import web
 import json
 
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_HOST
+from focus_guard.core.tab_server_endpoint import DEFAULT_TAB_SERVER_PORT
+
 
 class ApiServer:
     """
@@ -27,13 +30,17 @@ class ApiServer:
         self._app = web.Application()
         self._runner = None
         self._site = None
-        self._host = "127.0.0.1"
-        self._port = 5000
+        self._host = DEFAULT_TAB_SERVER_HOST
+        self._port = DEFAULT_TAB_SERVER_PORT
         self._running = False
         self._request_handlers = []
         self._routes_initialized = False
     
-    async def initialize(self, host: str = "127.0.0.1", port: int = 5000) -> None:
+    async def initialize(
+        self,
+        host: str = DEFAULT_TAB_SERVER_HOST,
+        port: int = DEFAULT_TAB_SERVER_PORT,
+    ) -> None:
         """
         Initialize the API server with the given host and port.
         
