@@ -50,6 +50,7 @@ export type DomainEntry = {
   status?: string;
   budget_seconds?: number | null;
   usage_seconds?: number;
+  visit_count?: number;
   whitelisted?: boolean;
   blocked?: boolean;
 };

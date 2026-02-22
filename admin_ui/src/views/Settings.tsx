@@ -8,12 +8,20 @@ import { ErrorState, LoadingState, OfflineState } from "../ui/QueryStates";
 
 // ── Helpers ───────────────────────────────────────────────────────
 
-function formatMinutes(seconds: number): string {
+function formatMinutes(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds)) return "—";
   const m = Math.round(seconds / 60);
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
   const rm = m % 60;
   return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
+
+function deriveStatus(d: DomainEntry): "allowed" | "blocked" | "budgeted" | "tracked" {
+  if (d.whitelisted || d.status === "allowed") return "allowed";
+  if (d.blocked || d.status === "blocked") return "blocked";
+  if ((d.budget_seconds != null && d.budget_seconds > 0) || d.status === "budgeted") return "budgeted";
+  return "tracked";
 }
 
 const PROTECTION_LEVELS: {
@@ -57,6 +65,7 @@ function EnforcementSection() {
   const [password, setPassword] = useState("");
   const [showPwField, setShowPwField] = useState(false);
   const [pendingMode, setPendingMode] = useState<EnforcementMode | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const enforcementQ = useQuery({
     queryKey: ["settings-enforcement"],
@@ -72,6 +81,16 @@ function EnforcementSection() {
       setShowPwField(false);
       setPassword("");
       setPendingMode(null);
+      setSuccessMsg("Protection level updated.");
+    },
+    onError: (error) => {
+      if (
+        error instanceof ApiClientError &&
+        (error.message.toLowerCase().includes("password required") ||
+          error.message.toLowerCase().includes("password_required"))
+      ) {
+        setShowPwField(true);
+      }
     },
   });
 
@@ -79,20 +98,26 @@ function EnforcementSection() {
 
   function handleSelect(mode: EnforcementMode) {
     if (mode === currentMode) return;
+    setSuccessMsg(null);
     setPendingMode(mode);
-    if (enforcementQ.data?.password_required) {
-      setShowPwField(true);
-    } else {
-      mutation.mutate({ mode });
-    }
+    mutation.reset();
+    mutation.mutate({ mode });
   }
 
   function handleConfirm() {
     if (!pendingMode) return;
+    setSuccessMsg(null);
     mutation.mutate({ mode: pendingMode, password: password || undefined });
   }
 
   if (enforcementQ.isLoading) return <LoadingState label="protection level" />;
+
+  const errorMsg =
+    mutation.isError && !showPwField
+      ? mutation.error instanceof ApiClientError
+        ? mutation.error.message
+        : "Failed to update protection level"
+      : null;
 
   return (
     <section className="space-y-3">
@@ -134,7 +159,8 @@ function EnforcementSection() {
         <div className="flex items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="flex-1">
             <label htmlFor="enforcement-pw" className="block text-xs font-medium text-gray-700">
-              Admin password required to change mode
+              Admin password required to change to{" "}
+              <strong>{PROTECTION_LEVELS.find((l) => l.mode === pendingMode)?.label}</strong>
             </label>
             <input
               id="enforcement-pw"
@@ -149,7 +175,7 @@ function EnforcementSection() {
           </div>
           <button
             type="button"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !password}
             onClick={handleConfirm}
             className="rounded-lg bg-ocean px-4 py-2 text-sm font-semibold text-white hover:bg-ocean/90 disabled:opacity-50"
           >
@@ -161,6 +187,7 @@ function EnforcementSection() {
               setShowPwField(false);
               setPendingMode(null);
               setPassword("");
+              mutation.reset();
             }}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-gray-600 hover:bg-slate-100"
           >
@@ -169,16 +196,8 @@ function EnforcementSection() {
         </div>
       )}
 
-      {mutation.isError && (
-        <p className="text-xs text-red-600">
-          {mutation.error instanceof ApiClientError
-            ? mutation.error.message
-            : "Failed to update protection level"}
-        </p>
-      )}
-      {mutation.isSuccess && (
-        <p className="text-xs text-emerald-600">Protection level updated.</p>
-      )}
+      {errorMsg && <p className="text-xs text-red-600">{errorMsg}</p>}
+      {successMsg && <p className="text-xs text-emerald-600">{successMsg}</p>}
     </section>
   );
 }
@@ -214,6 +233,20 @@ function BudgetSection() {
   });
 
   if (budgetsQ.isLoading) return <LoadingState label="budgets" />;
+  if (budgetsQ.isError) {
+    return (
+      <section className="space-y-3">
+        <h3 className="font-display text-lg text-ink">Time Budgets</h3>
+        <ErrorState
+          message={
+            budgetsQ.error instanceof ApiClientError
+              ? budgetsQ.error.message
+              : "Unable to load budget data. The tab server may not be running."
+          }
+        />
+      </section>
+    );
+  }
 
   const masterDaily = budgetsQ.data?.master_budget?.daily_seconds ?? 3600;
   const distractionUsed = budgetsQ.data?.distraction?.used_seconds ?? 0;
@@ -231,7 +264,6 @@ function BudgetSection() {
         <p className="text-xs text-gray-500">Daily limits for entertainment and distracting sites.</p>
       </div>
 
-      {/* Current usage bar */}
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between text-sm">
           <span className="font-medium text-gray-700">Today's Usage</span>
@@ -249,7 +281,6 @@ function BudgetSection() {
         </div>
       </div>
 
-      {/* Master budget slider */}
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <label className="block text-sm font-medium text-gray-700">
           Daily Distraction Budget: <strong>{formatMinutes(displayValue)}</strong>
@@ -293,38 +324,32 @@ function BudgetSection() {
             >
               {masterMutation.isPending ? "Saving..." : "Save"}
             </button>
-            <button
-              type="button"
-              onClick={() => setSliderValue(null)}
-              className="text-xs text-gray-500 hover:text-gray-700"
-            >
+            <button type="button" onClick={() => setSliderValue(null)} className="text-xs text-gray-500 hover:text-gray-700">
               Reset
             </button>
           </div>
         )}
         {masterMutation.isError && (
           <p className="mt-2 text-xs text-red-600">
-            {masterMutation.error instanceof ApiClientError
-              ? masterMutation.error.message
-              : "Failed to update budget"}
+            {masterMutation.error instanceof ApiClientError ? masterMutation.error.message : "Failed to update budget"}
           </p>
         )}
-        {masterMutation.isSuccess && (
-          <p className="mt-2 text-xs text-emerald-600">Budget saved.</p>
-        )}
+        {masterMutation.isSuccess && <p className="mt-2 text-xs text-emerald-600">Budget saved.</p>}
       </div>
 
-      {/* Per-category budgets */}
       {Object.keys(classificationBudgets).length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-medium text-gray-700">Per-Category Budgets</p>
           <div className="mt-2 space-y-1.5">
-            {Object.entries(classificationBudgets).map(([cat, b]) => (
-              <div key={cat} className="flex items-center justify-between text-sm">
-                <span className="capitalize text-gray-600">{cat.replace(/_/g, " ")}</span>
-                <span className="text-gray-500">{formatMinutes(b.daily_seconds)}</span>
-              </div>
-            ))}
+            {Object.entries(classificationBudgets).map(([cat, b]) => {
+              const secs = typeof b?.daily_seconds === "number" ? b.daily_seconds : null;
+              return (
+                <div key={cat} className="flex items-center justify-between text-sm">
+                  <span className="capitalize text-gray-600">{cat.replace(/_/g, " ")}</span>
+                  <span className="text-gray-500">{formatMinutes(secs)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -334,11 +359,14 @@ function BudgetSection() {
 
 // ── Domain Management Section ─────────────────────────────────────
 
+type StatusFilterValue = "all" | "allowed" | "blocked" | "budgeted" | "tracked";
+
 function DomainSection() {
   const queryClient = useQueryClient();
   const online = useOnlineStatus();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
 
   const domainsQ = useQuery({
     queryKey: ["settings-domains"],
@@ -359,11 +387,13 @@ function DomainSection() {
 
   if (domainsQ.isLoading) return <LoadingState label="domains" />;
   if (domainsQ.isError) {
-    const msg =
-      domainsQ.error instanceof ApiClientError
-        ? domainsQ.error.message
-        : "Unable to load domains";
-    return <ErrorState message={msg} />;
+    const msg = domainsQ.error instanceof ApiClientError ? domainsQ.error.message : "Unable to load domains";
+    return (
+      <section className="space-y-3">
+        <h3 className="font-display text-lg text-ink">Domain Management</h3>
+        <ErrorState message={msg} />
+      </section>
+    );
   }
 
   const rawDomains: DomainEntry[] = domainsQ.data?.domains ?? [];
@@ -374,8 +404,18 @@ function DomainSection() {
   const filtered = rawDomains.filter((d) => {
     if (search && !d.domain.toLowerCase().includes(search.toLowerCase())) return false;
     if (categoryFilter !== "all" && d.category !== categoryFilter) return false;
+    if (statusFilter !== "all" && deriveStatus(d) !== statusFilter) return false;
     return true;
   });
+
+  const statusCounts = rawDomains.reduce(
+    (acc, d) => {
+      const s = deriveStatus(d);
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   return (
     <section className="space-y-3">
@@ -390,7 +430,7 @@ function DomainSection() {
           placeholder="Search domains..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+          className="min-w-[180px] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
         />
         <select
           value={categoryFilter}
@@ -404,13 +444,22 @@ function DomainSection() {
             </option>
           ))}
         </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as StatusFilterValue)}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+        >
+          <option value="all">All statuses ({rawDomains.length})</option>
+          <option value="allowed">Allowed ({statusCounts["allowed"] ?? 0})</option>
+          <option value="blocked">Blocked ({statusCounts["blocked"] ?? 0})</option>
+          <option value="budgeted">Budgeted ({statusCounts["budgeted"] ?? 0})</option>
+          <option value="tracked">Tracked ({statusCounts["tracked"] ?? 0})</option>
+        </select>
       </div>
 
       {filtered.length === 0 ? (
         <p className="text-sm text-gray-500">
-          {rawDomains.length === 0
-            ? "No domains tracked yet."
-            : "No domains match your search."}
+          {rawDomains.length === 0 ? "No domains tracked yet." : "No domains match your filters."}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -420,7 +469,9 @@ function DomainSection() {
                 <th className="px-3 py-2">Domain</th>
                 <th className="px-3 py-2">Category</th>
                 <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2 text-right">Usage</th>
+                <th className="px-3 py-2 text-right">Daily Budget</th>
+                <th className="px-3 py-2 text-right">Usage Today</th>
+                <th className="px-3 py-2 text-right">Visits</th>
                 <th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
@@ -429,12 +480,8 @@ function DomainSection() {
                 <DomainRow
                   key={d.domain}
                   entry={d}
-                  onToggleWhitelist={(domain, add) =>
-                    whitelistMut.mutate({ domain, action: add ? "add" : "remove" })
-                  }
-                  onSetCategory={(domain, category) =>
-                    categoryMut.mutate({ domain, category })
-                  }
+                  onToggleWhitelist={(domain, add) => whitelistMut.mutate({ domain, action: add ? "add" : "remove" })}
+                  onSetCategory={(domain, category) => categoryMut.mutate({ domain, category })}
                   categories={categories}
                   busy={whitelistMut.isPending || categoryMut.isPending}
                 />
@@ -465,19 +512,18 @@ function DomainRow({
   categories: string[];
   busy: boolean;
 }) {
-  const isWhitelisted = entry.whitelisted ?? entry.status === "allowed";
+  const status = deriveStatus(entry);
 
-  const statusBadge = isWhitelisted
-    ? "bg-emerald-100 text-emerald-700"
-    : entry.blocked
-      ? "bg-red-100 text-red-700"
-      : "bg-slate-100 text-slate-600";
+  const statusBadge =
+    status === "allowed"
+      ? "bg-emerald-100 text-emerald-700"
+      : status === "blocked"
+        ? "bg-red-100 text-red-700"
+        : status === "budgeted"
+          ? "bg-blue-100 text-blue-700"
+          : "bg-slate-100 text-slate-600";
 
-  const statusLabel = isWhitelisted
-    ? "Allowed"
-    : entry.blocked
-      ? "Blocked"
-      : entry.status ?? "Tracked";
+  const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
 
   return (
     <tr className="hover:bg-slate-50/60">
@@ -503,20 +549,26 @@ function DomainRow({
         </span>
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
+        {entry.budget_seconds != null && entry.budget_seconds > 0 ? formatMinutes(entry.budget_seconds) : "—"}
+      </td>
+      <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
         {entry.usage_seconds != null ? formatMinutes(entry.usage_seconds) : "—"}
+      </td>
+      <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
+        {entry.visit_count != null ? entry.visit_count : "—"}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right">
         <button
           type="button"
           disabled={busy}
-          onClick={() => onToggleWhitelist(entry.domain, !isWhitelisted)}
+          onClick={() => onToggleWhitelist(entry.domain, status !== "allowed")}
           className={`rounded-md px-2 py-0.5 text-xs font-medium transition ${
-            isWhitelisted
+            status === "allowed"
               ? "border border-red-200 text-red-600 hover:bg-red-50"
               : "border border-emerald-200 text-emerald-600 hover:bg-emerald-50"
           } disabled:opacity-40`}
         >
-          {isWhitelisted ? "Remove Allow" : "Always Allow"}
+          {status === "allowed" ? "Remove Allow" : "Always Allow"}
         </button>
       </td>
     </tr>

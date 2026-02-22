@@ -30,19 +30,41 @@ class DevicesService:
     def list_devices(self) -> dict[str, Any]:
         """Return single-device status payload (list-ready)."""
 
+        health: dict[str, Any] = {}
+        status: dict[str, Any] = {}
+        enforcement: dict[str, Any] = {}
+
         try:
             health = self._tab_server_client.get_json("/api/health")
-            status = self._tab_server_client.get_json("/api/status")
-            enforcement = self._tab_server_client.get_json("/api/enforcement_mode")
-        except TabServerUnavailableError as exc:
+        except (TabServerUnavailableError, TabServerRequestError) as exc:
             raise DevicesServiceError("DEVICE_OFFLINE", str(exc), 409) from exc
-        except TabServerRequestError as exc:
-            raise DevicesServiceError("UPSTREAM_ERROR", exc.message, 502) from exc
+        except Exception as exc:
+            raise DevicesServiceError("UPSTREAM_ERROR", str(exc), 502) from exc
 
-        connected_browsers = status.get("connected_browsers")
-        if connected_browsers is None:
-            browsers = status.get("browsers") if isinstance(status.get("browsers"), list) else []
-            connected_browsers = len([b for b in browsers if b.get("connected")])
+        try:
+            status = self._tab_server_client.get_json("/api/status")
+        except (TabServerUnavailableError, TabServerRequestError):
+            pass
+        except Exception:
+            pass
+
+        try:
+            enforcement = self._tab_server_client.get_json("/api/enforcement_mode")
+        except (TabServerUnavailableError, TabServerRequestError):
+            pass
+        except Exception:
+            pass
+
+        connected_browsers = 0
+        try:
+            cb = status.get("connected_browsers")
+            if cb is not None:
+                connected_browsers = int(cb)
+            else:
+                browsers = status.get("browsers") if isinstance(status.get("browsers"), list) else []
+                connected_browsers = len([b for b in browsers if b.get("connected")])
+        except (TypeError, ValueError):
+            pass
 
         machine_name = str(health.get("machine_name") or "default-device")
         return {
@@ -54,7 +76,7 @@ class DevicesService:
                     "enforcement_mode": enforcement.get("enforcement_mode", "enforcing"),
                     "last_seen": None,
                     "browser_status": {
-                        "connected_browsers": int(connected_browsers or 0),
+                        "connected_browsers": connected_browsers,
                     },
                 }
             ]
