@@ -1,29 +1,43 @@
 // FocusGuard Background Script with Idle Detection & Retry Logic
 
 const CONFIG = {
-    useNativeMessaging: true,
+    useNativeMessaging: false,  // Disabled - using HTTP API only for store submission
     useHttpPost: true,
-    serverUrl: "http://127.0.0.1:5000/api/tabs",
-    statusUrl: "http://127.0.0.1:5000/api/status",
-    commandUrl: "http://127.0.0.1:5000/api/command",
-    blockCheckUrl: "http://127.0.0.1:5000/api/should_block",
-    eventStreamUrl: "http://127.0.0.1:5000/api/events", // New endpoint for real-time events
+    serverUrl: "http://127.0.0.1:58392/api/tabs",
+    statusUrl: "http://127.0.0.1:58392/api/status",
+    commandUrl: "http://127.0.0.1:58392/api/command",
+    blockCheckUrl: "http://127.0.0.1:58392/api/should_block",
+    eventStreamUrl: "http://127.0.0.1:58392/api/events", // New endpoint for real-time events
     updateInterval: 5000, // ms
     idleThresholdSec: 60, // idle if no input for 60s
     maxRetries: 3,
     retryDelayMs: 5000,
     debug: true,
-    usePreemptiveBlocking: true,
-    useRealTimeBlocking: true, // Enhanced real-time blocking
+    usePreemptiveBlocking: false, // Disabled - use real-time blocking with custom blocked page instead
+    useRealTimeBlocking: true, // Enhanced real-time blocking with custom blocked.html page
     blockingTimeout: 500, // Max time to wait for blocking decision (ms)
     cacheBlockingDecisions: true, // Cache blocking decisions for performance
-    batchEventUpdates: true // Batch multiple tab events together
+    batchEventUpdates: true, // Batch multiple tab events together
+    failClosedWhenServerDown: true, // Block unknown domains when server is unreachable (8.9 defense)
+    // Domains that are NEVER blocked even when server is down (productivity / essential)
+    safeDomains: [
+        'google.com', 'www.google.com', 'docs.google.com', 'drive.google.com',
+        'mail.google.com', 'calendar.google.com', 'meet.google.com',
+        'outlook.office.com', 'outlook.live.com', 'teams.microsoft.com',
+        'github.com', 'stackoverflow.com', 'learn.microsoft.com',
+        'wikipedia.org', 'en.wikipedia.org',
+        'zoom.us', 'slack.com',
+        'localhost', '127.0.0.1',
+    ]
 };
 
 let focusGuardPort = null;
 let isConnected = false;
 let retryCount = 0;
 let retryTimer = null;
+let serverReachable = true; // Track server connectivity for fail-closed logic
+let lastServerContact = Date.now(); // Timestamp of last successful server response
+let consecutiveServerFailures = 0; // Count of consecutive server request failures
 
 // Real-time blocking state
 let blockingCache = new Map(); // Cache for blocking decisions
@@ -32,18 +46,48 @@ let eventQueue = []; // Queue for batched events
 let eventBatchTimer = null;
 let lastEventTime = 0;
 
-function connectNativeHost() {
-    if (focusGuardPort) return;
-    debugLog('Connecting to native host...');
-    focusGuardPort = chrome.runtime.connectNative('com.focusguard.native');
-    isConnected = true;
-    focusGuardPort.onDisconnect.addListener(() => {
-        debugLog('Native host disconnected.');
-        focusGuardPort = null;
-        isConnected = false;
-        // Optionally, try to reconnect after a delay
-        setTimeout(connectNativeHost, CONFIG.retryDelayMs);
-    });
+// Active override sessions - track when to auto-block
+// Map of domain -> { tabIds: Set, startTime, checkInterval }
+let activeOverrideSessions = new Map();
+
+// Known URL shortener domains (8.7.1) — these can redirect to blocked sites
+const URL_SHORTENER_DOMAINS = new Set([
+    'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd',
+    'buff.ly', 'adf.ly', 'bit.do', 'mcaf.ee', 'su.pr', 'db.tt',
+    'qr.ae', 'cur.lv', 'ity.im', 'lnkd.in', 'youtu.be', 'rb.gy',
+    'shorturl.at', 'tiny.cc', 'v.gd', 'x.co', 'soo.gd', 'clck.ru',
+    'rebrand.ly', 'bl.ink', 'short.io', 'hyper.co',
+]);
+
+// Check if a URL is from a known shortener service
+function isUrlShortener(domain) {
+    if (!domain) return false;
+    return URL_SHORTENER_DOMAINS.has(domain.toLowerCase());
+}
+
+// Check if a domain is in the safe-domains allowlist (never blocked even when server is down)
+function isSafeDomain(domain) {
+    if (!domain) return false;
+    const lower = domain.toLowerCase();
+    return CONFIG.safeDomains.some(safe => lower === safe || lower.endsWith('.' + safe));
+}
+
+// Update server reachability state after a request succeeds or fails
+function markServerReachable() {
+    serverReachable = true;
+    lastServerContact = Date.now();
+    consecutiveServerFailures = 0;
+}
+
+function markServerUnreachable() {
+    consecutiveServerFailures++;
+    // Consider server down after 2 consecutive failures
+    if (consecutiveServerFailures >= 2) {
+        if (serverReachable) {
+            debugLog('WARNING: FocusGuard server is unreachable — fail-closed mode active');
+        }
+        serverReachable = false;
+    }
 }
 
 function debugLog(...args) {
@@ -354,20 +398,101 @@ startCommandListener();
 let blockRules = [];
 let blockRuleId = 1;
 
-// Initialize preemptive blocking
-function initPreemptiveBlocking() {
-    if (!CONFIG.usePreemptiveBlocking) {
-        debugLog('Preemptive blocking is disabled');
-        return;
+// Initialize preemptive blocking — always syncs known-blocked domains as
+// declarativeNetRequest redirect rules for instant network-layer blocking.
+// This eliminates the redirect race (8.3.1) and works alongside real-time blocking.
+async function initPreemptiveBlocking() {
+    // Always clear stale rules on startup
+    try {
+        const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+        if (existingRules.length > 0) {
+            const ruleIds = existingRules.map(rule => rule.id);
+            await chrome.declarativeNetRequest.updateDynamicRules({
+                removeRuleIds: ruleIds,
+                addRules: []
+            });
+            debugLog(`Cleared ${ruleIds.length} existing declarativeNetRequest rules`);
+        }
+    } catch (err) {
+        debugLog('Error clearing declarativeNetRequest rules:', err);
     }
     
-    debugLog('Initializing preemptive blocking');
+    debugLog('Initializing declarativeNetRequest domain sync (defense-in-depth)');
     
-    // Create alarm to periodically update block rules
-    chrome.alarms.create('updateBlockRules', { periodInMinutes: 5 });
+    // Create alarm to periodically sync blocked domains (every 5 min)
+    chrome.alarms.create('syncBlockedDomains', { periodInMinutes: 5 });
     
-    // Initial update of block rules
-    updateBlockRules();
+    // Initial sync
+    syncBlockedDomainsToRules();
+    
+    // Legacy preemptive blocking (server-pushed rules)
+    if (CONFIG.usePreemptiveBlocking) {
+        chrome.alarms.create('updateBlockRules', { periodInMinutes: 5 });
+        updateBlockRules();
+    }
+}
+
+// Sync blocked domains from server's domain overview into declarativeNetRequest rules.
+// This provides instant blocking for ALL known-blocked domains without waiting for
+// the real-time fetch per navigation.
+async function syncBlockedDomainsToRules() {
+    try {
+        const response = await fetch(
+            `${CONFIG.serverUrl.replace('/api/tabs', '/api/domains/overview')}?include_blocked=true`,
+            { headers: { 'Cache-Control': 'no-cache' } }
+        );
+        
+        if (!response.ok) {
+            debugLog(`Failed to fetch domains for declarativeNetRequest sync: ${response.status}`);
+            markServerUnreachable();
+            return;
+        }
+        
+        markServerReachable();
+        const data = await response.json();
+        
+        // Collect domains that are blocked
+        const blockedDomains = [];
+        if (data.domains) {
+            for (const d of data.domains) {
+                if (d.status === 'blocked') {
+                    blockedDomains.push(d.domain);
+                }
+            }
+        }
+        
+        if (blockedDomains.length === 0) {
+            debugLog('No blocked domains to sync to declarativeNetRequest');
+            return;
+        }
+        
+        // Build redirect rules — redirect to our blocked.html page
+        const blockedPageUrl = chrome.runtime.getURL('blocked.html');
+        const rules = blockedDomains.map((domain, index) => ({
+            id: 10000 + index,  // Use high IDs to avoid collision with legacy rules
+            priority: 1,
+            action: {
+                type: 'redirect',
+                redirect: {
+                    regexSubstitution: `${blockedPageUrl}?url=\\0&domain=${encodeURIComponent(domain)}&reason=${encodeURIComponent('Blocked by FocusGuard')}`
+                }
+            },
+            condition: {
+                regexFilter: `^https?://([^/]*\\.)?${domain.replace(/\./g, '\\.')}(/.*)?$`,
+                resourceTypes: ['main_frame']
+            }
+        }));
+        
+        // Cap at Chrome's limit of 5000 dynamic rules
+        const cappedRules = rules.slice(0, 5000);
+        
+        await updateDynamicRules(cappedRules);
+        debugLog(`Synced ${cappedRules.length} blocked domains to declarativeNetRequest rules`);
+        
+    } catch (err) {
+        debugLog('Error syncing blocked domains to declarativeNetRequest:', err);
+        markServerUnreachable();
+    }
 }
 
 // Update block rules from server
@@ -390,12 +515,19 @@ function updateBlockRules() {
             
             if (data.rules && data.rules.length > 0) {
                 // Convert server rules to declarativeNetRequest rules
+                // Use redirect action to show our custom blocked page
+                const blockedPageUrl = chrome.runtime.getURL('blocked.html');
                 const newRules = data.rules.map((rule, index) => ({
                     id: blockRuleId + index,
                     priority: 1,
-                    action: { type: 'block' },
+                    action: { 
+                        type: 'redirect',
+                        redirect: {
+                            regexSubstitution: `${blockedPageUrl}?url=\\0&domain=${encodeURIComponent(rule.domain)}&reason=${encodeURIComponent(rule.reason || 'Blocked by FocusGuard')}`
+                        }
+                    },
                     condition: {
-                        urlFilter: rule.domain,
+                        regexFilter: `^https?://([^/]*\\.)?${rule.domain.replace(/\./g, '\\.')}(/.*)?$`,
                         resourceTypes: ['main_frame']
                     }
                 }));
@@ -481,9 +613,16 @@ async function shouldBlockUrl(url, tabId = null) {
             
             if (!response.ok) {
                 debugLog(`Server returned ${response.status} for blocking check`);
+                markServerUnreachable();
+                // Fail-closed: block non-safe domains when server returns errors
+                if (CONFIG.failClosedWhenServerDown && !isSafeDomain(domain)) {
+                    debugLog(`FAIL-CLOSED: Blocking ${domain} (server error, not in safe list)`);
+                    return true;
+                }
                 return false;
             }
             
+            markServerReachable();
             const data = await response.json();
             const shouldBlock = data.should_block === true;
             
@@ -507,42 +646,210 @@ async function shouldBlockUrl(url, tabId = null) {
             
         } catch (fetchError) {
             clearTimeout(timeoutId);
+            markServerUnreachable();
             if (fetchError.name === 'AbortError') {
                 debugLog(`Blocking check timed out for ${domain} after ${CONFIG.blockingTimeout}ms`);
             } else {
                 debugLog(`Error in blocking check for ${domain}:`, fetchError);
             }
-            return false; // Default to not blocking on error
+            // Fail-closed: block non-safe domains when server is unreachable
+            if (CONFIG.failClosedWhenServerDown && !isSafeDomain(domain)) {
+                debugLog(`FAIL-CLOSED: Blocking ${domain} (server unreachable, not in safe list)`);
+                return true;
+            }
+            return false;
         } finally {
             pendingBlocks.delete(cacheKey);
         }
         
     } catch (err) {
         debugLog('Error checking if URL should be blocked:', err);
+        // Fail-closed for parse errors on non-safe domains
+        if (CONFIG.failClosedWhenServerDown && !serverReachable) {
+            return true;
+        }
         return false;
+    }
+}
+
+// Get the blocked page URL with parameters
+function getBlockedPageUrl(originalUrl, domain, reason) {
+    const blockedPage = chrome.runtime.getURL('blocked.html');
+    const params = new URLSearchParams({
+        url: originalUrl || '',
+        domain: domain || '',
+        reason: reason || 'This site is considered a distraction.'
+    });
+    return `${blockedPage}?${params.toString()}`;
+}
+
+// Redirect to blocked page instead of closing tab
+async function redirectToBlockedPage(tabId, url, reason) {
+    try {
+        const domain = new URL(url).hostname;
+        const blockedUrl = getBlockedPageUrl(url, domain, reason);
+        await chrome.tabs.update(tabId, { url: blockedUrl });
+        debugLog(`Redirected tab ${tabId} to blocked page for ${domain}`);
+        queueTabEvent('tab_blocked', { tabId, url, domain, reason, action: 'redirect' });
+        return true;
+    } catch (err) {
+        debugLog(`Error redirecting tab ${tabId}:`, err);
+        return false;
+    }
+}
+
+// Track active overrides locally (synced with server)
+const activeOverrides = new Map(); // domain -> { expiry_time, override_id }
+
+// Check if domain has an active override
+async function checkOverride(domain) {
+    try {
+        const response = await fetch(
+            `${CONFIG.serverUrl.replace('/api/tabs', '/api/override')}?domain=${encodeURIComponent(domain)}`,
+            { headers: { 'Cache-Control': 'no-cache' } }
+        );
+        if (!response.ok) return { hasOverride: false };
+        const data = await response.json();
+        
+        if (data.has_override) {
+            activeOverrides.set(domain, {
+                expiry_time: data.override.expiry_time,
+                override_id: data.override.id
+            });
+        } else {
+            activeOverrides.delete(domain);
+        }
+        
+        return { hasOverride: data.has_override, override: data.override };
+    } catch (err) {
+        debugLog('Error checking override:', err);
+        return { hasOverride: false };
+    }
+}
+
+// Enhanced blocking check that returns reason
+async function shouldBlockUrlWithReason(url, tabId = null) {
+    if (!CONFIG.useRealTimeBlocking || !url) {
+        debugLog(`Blocking check skipped: useRealTimeBlocking=${CONFIG.useRealTimeBlocking}, url=${url}`);
+        return { shouldBlock: false, reason: '' };
+    }
+    
+    try {
+        const domain = new URL(url).hostname;
+        debugLog(`Checking if should block: ${domain} (${url})`);
+        
+        // First check if there's an active override for this domain
+        try {
+            const overrideCheck = await checkOverride(domain);
+            if (overrideCheck.hasOverride) {
+                debugLog(`Domain ${domain} has active override, allowing access`);
+                return { shouldBlock: false, reason: '', hasOverride: true, override: overrideCheck.override };
+            }
+        } catch (overrideErr) {
+            debugLog(`Override check failed (continuing with block check): ${overrideErr}`);
+        }
+        
+        const cacheKey = `${domain}:${url}`;
+        const isShortener = isUrlShortener(domain);
+        
+        // URL shorteners (8.7.1): skip cache since destination is unknown
+        // In fail-closed mode, block shorteners outright
+        if (isShortener && !serverReachable && CONFIG.failClosedWhenServerDown) {
+            debugLog(`FAIL-CLOSED: Blocking URL shortener ${domain} (server unreachable, destination unknown)`);
+            return { shouldBlock: true, reason: 'URL shortener blocked — FocusGuard server unreachable' };
+        }
+        
+        // Check cache (skip for shorteners — destination changes per link)
+        if (!isShortener && CONFIG.cacheBlockingDecisions && blockingCache.has(cacheKey)) {
+            const cached = blockingCache.get(cacheKey);
+            if (Date.now() - cached.timestamp < 30000) {
+                debugLog(`Using cached blocking decision for ${domain}: shouldBlock=${cached.shouldBlock}`);
+                return { shouldBlock: cached.shouldBlock, reason: cached.reason };
+            }
+        }
+        
+        debugLog(`Fetching blocking decision from server for ${domain}...`);
+        
+        // Get tab info for title and referrer (if tabId available)
+        let title = '';
+        let referrer = '';
+        const browserName = navigator.userAgent.includes('Edg') ? 'Microsoft Edge' : 'Google Chrome';
+        if (tabId) {
+            try {
+                const tab = await chrome.tabs.get(tabId);
+                title = tab.title || '';
+                // Try to get referrer from tab's opener or from navigation history
+                if (tab.openerTabId) {
+                    try {
+                        const openerTab = await chrome.tabs.get(tab.openerTabId);
+                        referrer = openerTab.url || '';
+                    } catch (e) {
+                        debugLog('Could not get opener tab:', e);
+                    }
+                }
+            } catch (e) {
+                debugLog('Could not get tab info:', e);
+            }
+        }
+        
+        const response = await fetch(
+            `${CONFIG.blockCheckUrl}?url=${encodeURIComponent(url)}&domain=${encodeURIComponent(domain)}&title=${encodeURIComponent(title)}&tabId=${tabId || ''}&referrer=${encodeURIComponent(referrer)}&browser=${encodeURIComponent(browserName)}`,
+            { headers: { 'Cache-Control': 'no-cache' } }
+        );
+        
+        if (!response.ok) {
+            debugLog(`Server returned error: ${response.status}`);
+            markServerUnreachable();
+            // Fail-closed: block non-safe domains when server returns errors
+            if (CONFIG.failClosedWhenServerDown && !isSafeDomain(domain)) {
+                debugLog(`FAIL-CLOSED: Blocking ${domain} (server error, not in safe list)`);
+                return { shouldBlock: true, reason: 'FocusGuard server unreachable — blocked for safety' };
+            }
+            return { shouldBlock: false, reason: '' };
+        }
+        
+        markServerReachable();
+        const data = await response.json();
+        debugLog(`Server response for ${domain}: should_block=${data.should_block}, reason=${data.reason}`);
+        const result = { 
+            shouldBlock: data.should_block === true, 
+            reason: data.reason || 'Blocked by FocusGuard' 
+        };
+        
+        // Cache result
+        if (CONFIG.cacheBlockingDecisions) {
+            blockingCache.set(cacheKey, { ...result, timestamp: Date.now() });
+        }
+        
+        return result;
+    } catch (err) {
+        debugLog('Error in blocking check:', err);
+        markServerUnreachable();
+        // Fail-closed: block non-safe domains when server is unreachable
+        try {
+            const domain = new URL(url).hostname;
+            if (CONFIG.failClosedWhenServerDown && !isSafeDomain(domain)) {
+                debugLog(`FAIL-CLOSED: Blocking ${domain} (server unreachable, not in safe list)`);
+                return { shouldBlock: true, reason: 'FocusGuard server unreachable — blocked for safety' };
+            }
+        } catch (_) {}
+        return { shouldBlock: false, reason: '' };
     }
 }
 
 // Enhanced tab creation listener with real-time event streaming
 chrome.tabs.onCreated.addListener(async (tab) => {
-    // Send real-time event
     queueTabEvent('tab_created', tab);
     
     if (!CONFIG.useRealTimeBlocking || !tab.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge')) return;
     
     debugLog(`New tab created: ${tab.url} (ID: ${tab.id})`);
     
-    const shouldBlock = await shouldBlockUrl(tab.url, tab.id);
+    const result = await shouldBlockUrlWithReason(tab.url, tab.id);
     
-    if (shouldBlock) {
-        debugLog(`Blocking newly created tab with URL: ${tab.url}`);
-        try {
-            await chrome.tabs.remove(tab.id);
-            // Send blocking event
-            queueTabEvent('tab_blocked', { ...tab, reason: 'preemptive_block' });
-        } catch (err) {
-            debugLog(`Error removing blocked tab ${tab.id}:`, err);
-        }
+    if (result.shouldBlock) {
+        debugLog(`Blocking newly created tab: ${tab.url}`);
+        await redirectToBlockedPage(tab.id, tab.url, result.reason);
     }
 });
 
@@ -553,35 +860,217 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         queueTabEvent('tab_updated', { tabId, changeInfo, tab });
     }
     
-    if (!CONFIG.useRealTimeBlocking || !changeInfo.url) return;
+    if (!CONFIG.useRealTimeBlocking) return;
     
-    debugLog(`Tab ${tabId} navigating to: ${changeInfo.url}`);
+    // Check blocking on URL change OR when loading starts (to catch navigations)
+    const urlToCheck = changeInfo.url || (changeInfo.status === 'loading' && tab.url);
     
-    const shouldBlock = await shouldBlockUrl(changeInfo.url, tabId);
+    if (!urlToCheck) return;
     
-    if (shouldBlock) {
-        debugLog(`Blocking navigation to URL: ${changeInfo.url}`);
-        try {
-            await chrome.tabs.remove(tabId);
-            // Send blocking event
-            queueTabEvent('tab_blocked', { tabId, url: changeInfo.url, reason: 'navigation_block' });
-        } catch (err) {
-            debugLog(`Error removing blocked tab ${tabId}:`, err);
-        }
+    // Skip browser internal pages
+    if (urlToCheck.startsWith('chrome') || urlToCheck.startsWith('edge') || urlToCheck.startsWith('about:')) return;
+    
+    // Skip if already on blocked page
+    if (urlToCheck.includes('blocked.html')) return;
+    
+    debugLog(`Tab ${tabId} navigating to: ${urlToCheck} (status: ${changeInfo.status})`);
+    
+    const result = await shouldBlockUrlWithReason(urlToCheck, tabId);
+    
+    if (result.shouldBlock) {
+        debugLog(`Blocking navigation to URL: ${urlToCheck}`);
+        await redirectToBlockedPage(tabId, urlToCheck, result.reason);
     }
 });
 
 // Enhanced alarm listener with event queue flushing
 chrome.alarms.onAlarm.addListener(alarm => {
-    if (alarm.name === 'updateBlockRules') {
+    if (alarm.name === 'syncBlockedDomains') {
+        syncBlockedDomainsToRules();
+    } else if (alarm.name === 'updateBlockRules') {
         updateBlockRules();
     } else if (alarm.name === 'flushEvents') {
         flushEventQueue();
+    } else if (alarm.name === 'tickUsageTracker') {
+        tickUsageTracker();
     }
 });
 
 // Create alarm for periodic event flushing (fallback)
 chrome.alarms.create('flushEvents', { periodInMinutes: 0.5 }); // Every 30 seconds
+
+// Chrome alarms have a minimum of 1 minute, so we use setInterval for more frequent checks
+// Create alarm for usage tracker tick (every minute as backup)
+chrome.alarms.create('tickUsageTracker', { periodInMinutes: 1 }); // Every 1 minute (backup)
+
+// Use setInterval for more frequent override expiry checks (every 5 seconds)
+setInterval(() => {
+    if (activeOverrideSessions.size > 0) {
+        tickUsageTracker();
+    }
+}, 5000); // Every 5 seconds when there are active sessions
+
+// Track window focus state for active/inactive time tracking
+let lastActiveTabId = null;
+let lastActiveWindowId = null;
+
+// Window focus changed - track active state
+chrome.windows.onFocusChanged.addListener(async (windowId) => {
+    if (windowId === chrome.windows.WINDOW_ID_NONE) {
+        // Browser lost focus - all tabs inactive
+        debugLog('Browser window lost focus');
+        if (lastActiveTabId) {
+            await updateTabActiveState(lastActiveTabId, false);
+        }
+        lastActiveWindowId = null;
+    } else {
+        lastActiveWindowId = windowId;
+        // Get active tab in this window
+        try {
+            const tabs = await chrome.tabs.query({ active: true, windowId: windowId });
+            if (tabs.length > 0) {
+                const tab = tabs[0];
+                if (lastActiveTabId && lastActiveTabId !== tab.id) {
+                    await updateTabActiveState(lastActiveTabId, false);
+                }
+                lastActiveTabId = tab.id;
+                await updateTabActiveState(tab.id, true);
+                debugLog(`Window ${windowId} focused, active tab: ${tab.id}`);
+            }
+        } catch (err) {
+            debugLog('Error getting active tab on window focus:', err);
+        }
+    }
+});
+
+// Tab activated - track which tab is active
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+    debugLog(`Tab activated: ${activeInfo.tabId} in window ${activeInfo.windowId}`);
+    
+    // Deactivate previous tab
+    if (lastActiveTabId && lastActiveTabId !== activeInfo.tabId) {
+        await updateTabActiveState(lastActiveTabId, false);
+    }
+    
+    // Activate new tab (only if window is focused)
+    if (lastActiveWindowId === activeInfo.windowId || lastActiveWindowId === null) {
+        lastActiveTabId = activeInfo.tabId;
+        await updateTabActiveState(activeInfo.tabId, true);
+    }
+});
+
+// Update tab active state on server
+async function updateTabActiveState(tabId, isActive) {
+    if (!CONFIG.useHttpPost) return;
+    
+    try {
+        await fetch(`${CONFIG.serverUrl.replace('/api/tabs', '/api/domain/active')}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tab_id: tabId, is_active: isActive })
+        });
+    } catch (err) {
+        // Silent fail - not critical
+    }
+}
+
+// Tick the usage tracker (called every second)
+async function tickUsageTracker() {
+    // Check active override sessions for expiry
+    for (const [domain, session] of activeOverrideSessions.entries()) {
+        await checkOverrideSessionExpiry(domain, session);
+    }
+}
+
+// Check if an override session has expired and block if needed
+async function checkOverrideSessionExpiry(domain, session) {
+    try {
+        const response = await fetch(`${CONFIG.serverUrl.replace('/api/tabs', '/api/override')}?domain=${encodeURIComponent(domain)}`);
+        const result = await response.json();
+        
+        if (!result.has_override) {
+            // Override expired - block all tabs with this domain
+            debugLog(`Override expired for ${domain}, blocking tabs`);
+            
+            for (const tabId of session.tabIds) {
+                try {
+                    const tab = await chrome.tabs.get(tabId);
+                    if (tab && tab.url) {
+                        const tabDomain = extractDomain(tab.url);
+                        if (tabDomain === domain || tabDomain.endsWith('.' + domain)) {
+                            // Redirect to blocked page
+                            await redirectToBlockedPage(tabId, tab.url, result.expired_reason || 'Session time expired');
+                        }
+                    }
+                } catch (e) {
+                    // Tab may have been closed
+                }
+            }
+            
+            // Clean up session
+            activeOverrideSessions.delete(domain);
+        }
+    } catch (err) {
+        debugLog('Error checking override expiry:', err);
+    }
+}
+
+// Start tracking an override session and notify server
+async function startOverrideSession(domain, tabId) {
+    if (!activeOverrideSessions.has(domain)) {
+        activeOverrideSessions.set(domain, {
+            tabIds: new Set(),
+            startTime: Date.now(),
+            usageStarted: false
+        });
+    }
+    const session = activeOverrideSessions.get(domain);
+    session.tabIds.add(tabId);
+    
+    // Notify server to start usage tracking (this increments the override count)
+    if (!session.usageStarted) {
+        try {
+            const response = await fetch(`${CONFIG.serverUrl.replace('/api/tabs', '/api/override/start')}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain: domain, tab_id: String(tabId) })
+            });
+            const result = await response.json();
+            if (result.started) {
+                session.usageStarted = true;
+                debugLog(`Started override usage for ${domain}, tab ${tabId}, daily count: ${result.daily_count}`);
+            }
+        } catch (err) {
+            debugLog('Error starting override usage:', err);
+        }
+    }
+    
+    debugLog(`Tracking override session for ${domain}, tab ${tabId}`);
+}
+
+// Stop tracking an override session for a tab
+function stopOverrideSessionTab(domain, tabId) {
+    const session = activeOverrideSessions.get(domain);
+    if (session) {
+        session.tabIds.delete(tabId);
+        if (session.tabIds.size === 0) {
+            activeOverrideSessions.delete(domain);
+            debugLog(`Ended override session for ${domain} (no more tabs)`);
+        }
+    }
+}
+
+// NOTE: override_granted messages are handled by the unified listener below (near overriddenTabs).
+
+// Clean up override sessions when tabs are closed
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+    // Check all sessions and remove this tab
+    for (const [domain, session] of activeOverrideSessions.entries()) {
+        if (session.tabIds.has(tabId)) {
+            stopOverrideSessionTab(domain, tabId);
+        }
+    }
+});
 
 // Queue tab events for batched sending
 function queueTabEvent(eventType, eventData) {
@@ -682,8 +1171,110 @@ setInterval(() => {
     }
 }, 30000); // Clean every 30 seconds
 
+// Track tabs with overridden domains for expiry monitoring
+const overriddenTabs = new Map(); // tabId -> { domain, expiry_time, override_id }
+
+// Monitor overridden tabs and close when override expires
+async function checkOverrideExpiry() {
+    const now = Date.now() / 1000; // Convert to seconds to match server timestamps
+    
+    for (const [tabId, info] of overriddenTabs.entries()) {
+        if (now > info.expiry_time) {
+            debugLog(`Override expired for tab ${tabId} (${info.domain})`);
+            
+            try {
+                // Get current tab info
+                const tab = await chrome.tabs.get(tabId);
+                const tabDomain = new URL(tab.url).hostname;
+                
+                // Only redirect if still on the overridden domain
+                if (tabDomain === info.domain || tabDomain.endsWith('.' + info.domain)) {
+                    debugLog(`Redirecting expired override tab ${tabId} to blocked page`);
+                    await redirectToBlockedPage(tabId, tab.url, 'Override time expired');
+                    queueTabEvent('override_expired', { tabId, domain: info.domain, override_id: info.override_id });
+                }
+            } catch (err) {
+                debugLog(`Tab ${tabId} no longer exists or error:`, err);
+            }
+            
+            overriddenTabs.delete(tabId);
+        }
+    }
+}
+
+// Check override expiry every 10 seconds
+setInterval(checkOverrideExpiry, 10000);
+
+// Unified listener for messages from blocked page (override_granted)
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'override_granted') {
+        debugLog(`Override granted for ${message.domain}, expiry: ${message.expiry_time}`);
+        
+        const tabId = sender.tab?.id;
+        
+        // Start server-side usage tracking session
+        if (tabId && message.domain) {
+            startOverrideSession(message.domain, tabId);
+        }
+        
+        // Track this tab for client-side expiry monitoring
+        if (sender.tab) {
+            overriddenTabs.set(sender.tab.id, {
+                domain: message.domain,
+                expiry_time: message.expiry_time,
+                override_id: message.override_id
+            });
+        }
+        
+        // Update local override cache
+        activeOverrides.set(message.domain, {
+            expiry_time: message.expiry_time,
+            override_id: message.override_id
+        });
+        
+        // Clear blocking cache for this domain so it gets re-checked
+        for (const [key] of blockingCache.entries()) {
+            if (key.includes(message.domain)) {
+                blockingCache.delete(key);
+            }
+        }
+        
+        sendResponse({ success: true });
+    }
+    return true; // Keep channel open for async response
+});
+
+// Track when tabs navigate to overridden domains
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.url && !changeInfo.url.includes('blocked.html')) {
+        try {
+            const domain = new URL(changeInfo.url).hostname;
+            const override = activeOverrides.get(domain);
+            
+            if (override && (Date.now() / 1000) < override.expiry_time) {
+                // Tab navigated to an overridden domain, track it
+                if (!overriddenTabs.has(tabId)) {
+                    overriddenTabs.set(tabId, {
+                        domain: domain,
+                        expiry_time: override.expiry_time,
+                        override_id: override.override_id
+                    });
+                    debugLog(`Tracking tab ${tabId} on overridden domain ${domain}`);
+                }
+            }
+        } catch (err) {
+            // Invalid URL, ignore
+        }
+    }
+});
+
+// Clean up when tabs are closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+    overriddenTabs.delete(tabId);
+});
+
 // Initialize preemptive blocking
 initPreemptiveBlocking();
 
-debugLog('FocusGuard background script initialized with real-time blocking.');
+debugLog('FocusGuard background script initialized with real-time blocking and override support.');
 debugLog(`Configuration: Real-time blocking: ${CONFIG.useRealTimeBlocking}, Caching: ${CONFIG.cacheBlockingDecisions}, Batching: ${CONFIG.batchEventUpdates}`);
