@@ -435,12 +435,12 @@ The function `connectNativeHost()` is defined twice in `background.js` (lines ~9
 ## 6. Prioritized Execution Roadmap
 
 ### Sprint 1: Stabilize (1-2 days)
-1. ✅ Fix AuthProvider login bug (5 min) — CRITICAL
-2. Fix admin gateway port default (0.5 day) — IMPORTANT
+1. ~~Fix AuthProvider login bug~~ — FALSE POSITIVE (verified correct Feb 21)
+2. ✅ Fix admin gateway port default — 7 files updated (Feb 21)
 3. Rebuild exe with all Phase 3.5 fixes (0.5 day) — CRITICAL
 
 ### Sprint 2: Make Dashboard Useful (3-5 days)
-4. Parallelize dashboard aggregation calls (0.5 day) — CRITICAL
+4. ✅ Parallelize dashboard aggregation calls — ThreadPoolExecutor(6), 3-5x speedup (Feb 21)
 5. Dashboard hero summary redesign (2-3 days) — IMPORTANT
 6. Date/time range selector (1-2 days) — IMPORTANT
 
@@ -455,10 +455,15 @@ The function `connectNativeHost()` is defined twice in `background.js` (lines ~9
 12. Consolidate test suite (1-2 days) — IMPORTANT
 
 ### Sprint 5: Polish (2-3 days)
-13. Rename views from Placeholder (0.5 day) — DEBT
-14. Remove legacy browser v1 code (0.5 day) — DEBT
-15. Add SQLite indexes (0.5 day) — PERFORMANCE
+13. ✅ Rename views from Placeholder (Feb 21) — 5 files renamed + router + Settings content updated
+14. Remove legacy browser v1 code — DEFERRED (30+ files cross-reference; needs migration plan)
+15. ✅ Add SQLite compound indexes (Feb 21) — activity_logger + saved_links
 16. Extension event-driven updates (1 day) — PERFORMANCE
+
+### Also completed (Feb 21):
+- ✅ Removed duplicate `connectNativeHost()` in extension background.js
+- ✅ Admin UI Vite production build verified clean
+- ✅ All 51 backend + 14 frontend tests passing
 
 ### Future Sprints
 17. Activity timeline page
