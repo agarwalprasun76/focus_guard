@@ -437,7 +437,7 @@ The function `connectNativeHost()` is defined twice in `background.js` (lines ~9
 ### Sprint 1: Stabilize (1-2 days)
 1. ~~Fix AuthProvider login bug~~ — FALSE POSITIVE (verified correct Feb 21)
 2. ✅ Fix admin gateway port default — 7 files updated (Feb 21)
-3. Rebuild exe with all Phase 3.5 fixes (0.5 day) — CRITICAL
+3. ✅ Rebuild exe with all fixes (Feb 21) — rebuilt twice this session
 
 ### Sprint 2: Make Dashboard Useful (3-5 days)
 4. ✅ Parallelize dashboard aggregation calls — ThreadPoolExecutor(6), 3-5x speedup (Feb 21)
@@ -445,12 +445,12 @@ The function `connectNativeHost()` is defined twice in `background.js` (lines ~9
 6. Date/time range selector (1-2 days) — IMPORTANT
 
 ### Sprint 3: Enable Configuration (3-5 days)
-7. Wire Settings page with budget controls (2 days) — IMPORTANT
-8. Wire Settings page with domain management (2 days) — IMPORTANT
-9. Wire enforcement mode toggle (0.5 day) — IMPORTANT
+7. ✅ Wire Settings page with budget controls (Feb 21) — slider, presets, per-category display
+8. ✅ Wire Settings page with domain management (Feb 21) — searchable table, category/status/budget filters, allow/block actions
+9. ✅ Wire enforcement mode toggle (Feb 21) — 3-card selector with password-on-failure flow
 
 ### Sprint 4: Reliability (2-3 days)
-10. Fix hourly email with runtime diagnostics (1-2 days) — CRITICAL
+10. ✅ Fix hourly email blank report (Feb 21) — fixed open-session WHERE clause, active-duration estimation for open sessions, ISO timestamp comparison normalization
 11. Add classification cache (1 day) — PERFORMANCE
 12. Consolidate test suite (1-2 days) — IMPORTANT
 
@@ -464,15 +464,29 @@ The function `connectNativeHost()` is defined twice in `background.js` (lines ~9
 - ✅ Removed duplicate `connectNativeHost()` in extension background.js
 - ✅ Admin UI Vite production build verified clean
 - ✅ All 51 backend + 14 frontend tests passing
+- ✅ Created admin gateway settings service + router (8 endpoints under /admin/api/v1/settings/*)
+- ✅ Created frontend API module (admin_ui/src/api/settings.ts) with typed functions
+- ✅ Fixed NaN display in per-category budgets (null/undefined guard)
+- ✅ Fixed enforcement mode password prompt (detects from POST 403 failure, not pre-checked from GET)
+- ✅ Made Devices service resilient to partial tab server failures
+- ✅ Domain management: added Daily Budget column, Visits column, status filter (allowed/blocked/budgeted/tracked)
+
+### Known Issues Remaining
+- **Devices page** may show INTERNAL_ERROR if tab server `/api/status` returns unexpected format — hardened but needs runtime verification
+- **Exceptions page** is fully wired but depends on tab server being reachable — test in packaged app
+- **Per-category budget editing** is read-only (display only); adding sliders needs new UX design
+- **Domain management** `visit_count` field depends on tab server `/api/domains/overview` including it — may show "—" if not present
 
 ### Future Sprints
 17. Activity timeline page
-18. WebSocket real-time updates
-19. Auto-update mechanism
-20. Classification feedback loop
-21. Structured logging
-22. CI/CD pipeline
-23. Exe size optimization
+18. Dashboard hero summary redesign
+19. Date/time range selector on dashboard
+20. WebSocket real-time updates
+21. Auto-update mechanism
+22. Classification feedback loop
+23. Structured logging
+24. CI/CD pipeline
+25. Exe size optimization
 
 ---
 
