@@ -28,6 +28,8 @@
 | 04 | **ARCHITECTURE_DEEP_DIVE** | Component interactions, data flows, integration points | Understanding how things connect |
 | 05 | **DEVELOPMENT_WORKFLOWS** | Build, test, debug, add features | Doing actual development work |
 | 06 | **API_REFERENCE** | All HTTP endpoints for both servers | Working with APIs |
+| 07 | **ADMIN_CONSOLE_UX_IMPROVEMENT_PLAN** | UX review + improvement blueprint for admin UI | Planning admin console improvements |
+| 08 | **APPLICATION_ARCHITECTURE_IMPROVEMENT_PLAN** | Full application audit, prioritized issues + roadmap | Planning broader architecture work |
 
 ---
 
