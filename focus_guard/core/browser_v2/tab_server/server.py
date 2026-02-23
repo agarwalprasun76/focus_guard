@@ -1540,27 +1540,27 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                 end_date = date_str
 
             # Locate usage.db written by EnhancedActivityLogger.
-            # Check multiple candidate paths because the logger may write to
-            # different locations depending on how FocusGuard was started
-            # (service vs tray-app vs dev).
+            # LOCALAPPDATA is the primary write location for the tray-app path.
+            # ProgramData may contain a stale/empty DB from other components.
             local_app = os.environ.get("LOCALAPPDATA", "")
             program_data = os.environ.get("PROGRAMDATA", "")
             candidates = []
             if local_app:
                 candidates.append(os.path.join(local_app, "FocusGuard", "usage.db"))
-            if program_data:
-                candidates.append(os.path.join(program_data, "FocusGuard", "usage.db"))
-            home = os.path.expanduser("~")
-            candidates.append(os.path.join(home, ".focus_guard", "usage.db"))
-            # Also check deployment config data directory
             try:
                 from focus_guard.deployment.config import DeploymentConfig
                 cfg_dir = str(DeploymentConfig.load().storage.get_data_directory())
                 cfg_candidate = os.path.join(cfg_dir, "usage.db")
                 if cfg_candidate not in candidates:
-                    candidates.insert(0, cfg_candidate)
+                    candidates.append(cfg_candidate)
             except Exception:
                 pass
+            if program_data:
+                pd_candidate = os.path.join(program_data, "FocusGuard", "usage.db")
+                if pd_candidate not in candidates:
+                    candidates.append(pd_candidate)
+            home = os.path.expanduser("~")
+            candidates.append(os.path.join(home, ".focus_guard", "usage.db"))
 
             db_path = None
             for c in candidates:
