@@ -54,7 +54,33 @@ class ClassificationResult:
             "metadata": self.metadata,
             "classification_time_ms": self.classification_time_ms,
         }
-    
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "ClassificationResult":
+        """Reconstruct from to_dict() output (e.g. from persistent cache)."""
+        usefulness_val = (d.get("usefulness") or "unknown").lower()
+        usefulness = ContentUsefulness.UNKNOWN
+        try:
+            usefulness = ContentUsefulness(usefulness_val)
+        except ValueError:
+            for u in ContentUsefulness:
+                if u.value == usefulness_val:
+                    usefulness = u
+                    break
+        return cls(
+            domain=d.get("domain", ""),
+            url=d.get("url", ""),
+            category=d.get("category", "UNKNOWN"),
+            usefulness=usefulness,
+            confidence=float(d.get("confidence", 0)),
+            reason=d.get("reason", ""),
+            classifier_used=d.get("classifier_used", "fallback"),
+            is_distracting=bool(d.get("is_distracting", False)),
+            content_type=d.get("content_type", "unknown"),
+            metadata=d.get("metadata") or {},
+            classification_time_ms=float(d.get("classification_time_ms", 0)),
+        )
+
     @property
     def budget_key(self) -> str:
         """Key for looking up classification-specific budget."""
@@ -243,12 +269,22 @@ class ClassificationService:
         start_time = time.time()
         context = context or {}
         
-        # Check cache first
+        # Check memory cache first, then persistent cache (4.2)
         cache_key = self._get_cache_key(domain, url, context)
         cached = self._check_cache(cache_key)
         if cached:
             return cached
-        
+        try:
+            from .classification_cache_persistent import get_persistent_classification_cache
+            persistent = get_persistent_classification_cache()
+            cached_dict = persistent.get(cache_key)
+            if cached_dict:
+                cached = ClassificationResult.from_dict(cached_dict)
+                self._store_cache(cache_key, cached)  # repopulate memory
+                return cached
+        except Exception as e:
+            logger.debug("Persistent cache read failed: %s", e)
+
         result = None
         
         # Try domain-specific classifiers first
@@ -280,9 +316,14 @@ class ClassificationService:
         # Record classification time
         result.classification_time_ms = (time.time() - start_time) * 1000
         
-        # Cache the result
+        # Cache the result (memory + persistent 4.2)
         self._store_cache(cache_key, result)
-        
+        try:
+            from .classification_cache_persistent import get_persistent_classification_cache
+            get_persistent_classification_cache().set(cache_key, result.to_dict())
+        except Exception as e:
+            logger.debug("Persistent cache write failed: %s", e)
+
         logger.info(
             "Classified %s: category=%s, usefulness=%s, confidence=%.2f, classifier=%s, time=%.1fms",
             domain, result.category, result.usefulness.value, 

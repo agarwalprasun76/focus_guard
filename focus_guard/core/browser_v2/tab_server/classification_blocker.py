@@ -9,6 +9,7 @@ values below are kept as **fallback defaults** only.
 """
 
 import logging
+import time
 from typing import Dict, Any, Optional, Set
 
 from .blocking import BlockingDecision, BlockingRule
@@ -223,9 +224,30 @@ class ClassificationBlocker:
             ctx.set("_blocker", self)
             return ctx
 
+        start_ns = time.perf_counter_ns()
         pipeline = self._get_pipeline()
         decision, step_trace = pipeline.run(request, context_initializer=context_initializer)
-        # TODO (4.3): write decision log row with step_trace here
+        latency_ms = (time.perf_counter_ns() - start_ns) / 1e6
+
+        try:
+            from .blocking_decision_log import (
+                get_blocking_decision_log,
+                step_trace_to_json_safe,
+            )
+            log = get_blocking_decision_log()
+            trace_safe = step_trace_to_json_safe(step_trace)
+            log.write(
+                url=url,
+                domain=domain,
+                final_decision="block" if decision.should_block else "allow",
+                reason=decision.reason,
+                step_trace=trace_safe,
+                classification_snapshot=decision.classification,
+                latency_ms=latency_ms,
+            )
+        except Exception as e:
+            logger.warning("Failed to write blocking decision log: %s", e)
+
         return decision
     
     def _log_classification_event(
