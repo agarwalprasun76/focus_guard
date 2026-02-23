@@ -78,20 +78,19 @@ class DevicesService:
         if mode not in ("tracking", "advisory", "enforcing"):
             mode = "enforcing"
 
-        return {
-            "devices": [
-                {
-                    "id": machine_name,
-                    "name": machine_name,
-                    "status": "online",
-                    "enforcement_mode": mode,
-                    "last_seen": None,
-                    "browser_status": {
-                        "connected_browsers": connected_browsers,
-                    },
-                }
-            ]
-        }
+        device_list = [
+            {
+                "id": machine_name,
+                "name": machine_name,
+                "status": "online",
+                "enforcement_mode": mode,
+                "last_seen": None,
+                "browser_status": {
+                    "connected_browsers": connected_browsers,
+                },
+            }
+        ]
+        return {"devices": device_list}
 
     def set_enforcement_mode(self, device_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Proxy enforcement mode update to tab server."""

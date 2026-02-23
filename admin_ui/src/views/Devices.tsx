@@ -25,7 +25,8 @@ export function Devices() {
     return <ErrorState message={message} />;
   }
 
-  const devices = devicesQuery.data?.devices ?? [];
+  const raw = devicesQuery.data?.devices;
+  const devices = Array.isArray(raw) ? raw : [];
 
   return (
     <div className="space-y-4">
@@ -37,14 +38,21 @@ export function Devices() {
         <EmptyState message="No devices are currently available." />
       ) : (
         <ul className="space-y-2">
-          {devices.map((device) => (
-            <li key={device.id} className="rounded-xl border border-slate-300 bg-white px-4 py-3">
-              <p className="text-sm font-semibold text-ink">{device.name}</p>
-              <p className="mt-1 text-xs text-gray-500">
-                {device.status} • {device.enforcement_mode} • browsers {device.browser_status?.connected_browsers ?? 0}
-              </p>
-            </li>
-          ))}
+          {devices.map((device) => {
+            const id = device?.id ?? "unknown";
+            const name = device?.name ?? "Unnamed device";
+            const status = device?.status ?? "unknown";
+            const mode = device?.enforcement_mode ?? "enforcing";
+            const browsers = device?.browser_status?.connected_browsers ?? 0;
+            return (
+              <li key={id} className="rounded-xl border border-slate-300 bg-white px-4 py-3">
+                <p className="text-sm font-semibold text-ink">{name}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {status} • {mode} • browsers {browsers}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

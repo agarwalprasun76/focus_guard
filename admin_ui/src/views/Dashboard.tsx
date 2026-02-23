@@ -21,8 +21,43 @@ function formatMinutes(seconds: number): string {
 function formatRelativeSeconds(value: number | null): string {
   if (value === null || value < 0) return "--";
   const mins = Math.floor(value / 60);
-  const secs = value % 60;
-  return `${mins}m ${secs}s`;
+  const secs = Math.floor(value % 60);
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (m === 0) return h === 1 ? "1 hour left" : `${h} hours left`;
+    return `${h}h ${m} min left`;
+  }
+  if (secs === 0) return mins === 1 ? "1 minute left" : `${mins} minutes left`;
+  return `${mins} min ${secs} sec left`;
+}
+
+/** Human-readable duration for display (e.g. "5 minutes", "1 hour 15 minutes"). */
+function formatDurationHuman(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0 minutes";
+  const totalMins = Math.round(seconds / 60);
+  if (totalMins < 60) return totalMins === 1 ? "1 minute" : `${totalMins} minutes`;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (m === 0) return h === 1 ? "1 hour" : `${h} hours`;
+  return `${h} hour${h > 1 ? "s" : ""} ${m} minute${m > 1 ? "s" : ""}`;
+}
+
+/** Domains to hide from Problem Sites / Recent Overrides (synthetic, internal, test). */
+const SYNTHETIC_DOMAIN_PATTERNS = [
+  "localhost",
+  "127.0.0.1",
+  "internal",
+  "smoke",
+  "example.com",
+  "test.",
+  ".local",
+];
+
+function isSyntheticDomain(domain: string | null | undefined): boolean {
+  if (!domain || typeof domain !== "string") return true;
+  const d = domain.toLowerCase();
+  return SYNTHETIC_DOMAIN_PATTERNS.some((p) => d.includes(p));
 }
 
 function getRefetchIntervalMs(defaultMs: number, key: string): number {
@@ -464,30 +499,35 @@ export function Dashboard() {
           )}
         </CollapsibleSection>
 
-        {/* Problem Sites (Friction) */}
-        <CollapsibleSection
-          title="Problem Sites"
-          badge={dashboard.top_friction.length > 0 ? dashboard.top_friction.length : undefined}
-          defaultOpen={dashboard.top_friction.length > 0}
-        >
-          {dashboard.top_friction.length === 0 ? (
-            <p className="text-sm text-gray-500">No problem sites detected.</p>
-          ) : (
-            <ul className="space-y-2">
-              {dashboard.top_friction.slice(0, 5).map((item) => (
-                <li key={item.domain} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">{item.domain}</p>
-                    <p className="text-xs text-gray-500">
-                      {item.override_count} {item.override_count === 1 ? "override" : "overrides"} today
-                    </p>
-                  </div>
-                  <p className="text-xs font-semibold text-gray-700">{formatMinutes(item.time_used_seconds)} screen time</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CollapsibleSection>
+        {/* Problem Sites */}
+        {(() => {
+          const problemSites = dashboard.top_friction.filter((item) => !isSyntheticDomain(item?.domain));
+          return (
+            <CollapsibleSection
+              title="Problem Sites"
+              badge={problemSites.length > 0 ? problemSites.length : undefined}
+              defaultOpen={problemSites.length > 0}
+            >
+              {problemSites.length === 0 ? (
+                <p className="text-sm text-gray-500">No problem sites detected.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {problemSites.slice(0, 5).map((item) => (
+                    <li key={item.domain} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{item.domain}</p>
+                        <p className="text-xs text-gray-500">
+                          {item.override_count} {item.override_count === 1 ? "override" : "overrides"} today
+                        </p>
+                      </div>
+                      <p className="text-xs font-semibold text-gray-700">{formatDurationHuman(item.time_used_seconds)} screen time</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CollapsibleSection>
+          );
+        })()}
 
         {/* Open Tabs — only show if there are tabs */}
         {openTabs.length > 0 && (
@@ -518,27 +558,32 @@ export function Dashboard() {
         )}
 
         {/* Recent Overrides */}
-        <CollapsibleSection
-          title="Recent Overrides"
-          badge={dashboard.recent_overrides.length > 0 ? dashboard.recent_overrides.length : undefined}
-        >
-            {dashboard.recent_overrides.length === 0 ? (
-            <p className="text-sm text-gray-500">No recent overrides.</p>
-          ) : (
-            <ul className="space-y-2">
-              {dashboard.recent_overrides.slice(0, 5).map((item) => (
-                <li key={item.id} className="rounded-lg bg-slate-50 px-3 py-2">
-                  <p className="text-sm font-semibold text-ink">{item.domain}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {item.status === "Active" && item.remaining_seconds != null && item.remaining_seconds > 0
-                      ? `Active • ${formatRelativeSeconds(item.remaining_seconds)} left`
-                      : "Expired"}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CollapsibleSection>
+        {(() => {
+          const recentOverrides = dashboard.recent_overrides.filter((item) => !isSyntheticDomain(item?.domain));
+          return (
+            <CollapsibleSection
+              title="Recent Overrides"
+              badge={recentOverrides.length > 0 ? recentOverrides.length : undefined}
+            >
+              {recentOverrides.length === 0 ? (
+                <p className="text-sm text-gray-500">No recent overrides.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {recentOverrides.slice(0, 5).map((item) => (
+                    <li key={item.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                      <p className="text-sm font-semibold text-ink">{item.domain}</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {item.status === "Active" && item.remaining_seconds != null && item.remaining_seconds > 0
+                          ? `Active • ${formatRelativeSeconds(item.remaining_seconds)}`
+                          : "Expired"}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CollapsibleSection>
+          );
+        })()}
 
         {/* Saved Links */}
         <CollapsibleSection

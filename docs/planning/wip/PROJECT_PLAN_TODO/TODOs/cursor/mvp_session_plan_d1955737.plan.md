@@ -13,7 +13,7 @@ todos:
     status: in_progress
   - id: phase1-email-link
     content: "Phase 1.1-1.2: Add admin console link + health check link to email reports"
-    status: pending
+    status: completed
   - id: phase1-email-rich
     content: "Phase 1.3: Richer email content -- top apps, domains, blocked sites, overrides"
     status: pending
@@ -22,7 +22,7 @@ todos:
     status: pending
   - id: phase2-bugs
     content: "Phase 2.1-2.2: Fix BUG-012 (devices page) + BUG-015 (friction readability)"
-    status: pending
+    status: completed
   - id: phase3-blocked
     content: "Phase 3.1: Verify/fix budget context on blocked page (W-60 / BUG-018)"
     status: pending

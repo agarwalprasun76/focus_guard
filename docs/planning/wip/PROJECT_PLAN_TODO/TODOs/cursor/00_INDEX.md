@@ -31,8 +31,10 @@
 | 07 | **ADMIN_CONSOLE_UX_IMPROVEMENT_PLAN** | UX review + improvement blueprint for admin UI | Planning admin console improvements |
 | 08 | **APPLICATION_ARCHITECTURE_IMPROVEMENT_PLAN** | Full application audit, prioritized issues + roadmap | Planning broader architecture work |
 | 09 | **NEXT_SESSION_ADMIN_DASHBOARD_IMPROVEMENTS** | Handoff brief with completed/remaining work | Session continuity |
-| 10 | **SESSION_PLAN_02222026** | Prioritized task list for Feb 22 session | Current session execution |
+| 10 | **SESSION_PLAN_02222026** | Prioritized task list for Feb 22 session | Session execution |
 | 11 | **WISHLIST** | Running list of improvements and future ideas | Long-term planning |
+| — | **mvp_session_plan_d1955737.plan.md** | MVP session plan (Phases 0–5, classification roadmap) | Current MVP execution |
+| — | **TRACKER_MVP_SESSION_PLAN_02222026.md** | Task tracker for MVP session plan | Track completion; update when tasks done |
 
 ---
 
@@ -77,6 +79,8 @@
 - **Active progress**: `gpt_53_codex/PROGRESS_TRACKER_02202026.md`
 - **Active bugs**: `gpt_53_codex/BUGS_02212026.md`
 - **Session plan**: `cursor/10_SESSION_PLAN_02222026.md`
+- **MVP session plan**: `cursor/mvp_session_plan_d1955737.plan.md`
+- **MVP session tracker**: `cursor/TRACKER_MVP_SESSION_PLAN_02222026.md`
 - **Wishlist**: `cursor/11_WISHLIST.md`
 - **Historical plan**: `opus_45/DEPLOYMENT_AND_MVP_PLAN_02062026.md` (Sections 1-8, comprehensive)
 - **Historical progress**: `opus_45/PROGRESS_TRACKER.md` (Sessions 1-8, domain consolidation, security)
