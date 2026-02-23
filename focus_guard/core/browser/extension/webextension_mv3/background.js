@@ -8,7 +8,9 @@ const CONFIG = {
     commandUrl: "http://127.0.0.1:58392/api/command",
     blockCheckUrl: "http://127.0.0.1:58392/api/should_block",
     eventStreamUrl: "http://127.0.0.1:58392/api/events", // New endpoint for real-time events
-    updateInterval: 5000, // ms
+    heartbeatIntervalMs: 30000, // Connection monitoring only (W-42)
+    tabUpdateDebounceMs: 800, // Debounce event-driven tab snapshot sends
+    tabSnapshotFallbackMs: 5 * 60 * 1000, // Fallback: full snapshot at least every 5 min (W-42)
     idleThresholdSec: 60, // idle if no input for 60s
     maxRetries: 3,
     retryDelayMs: 5000,
@@ -287,30 +289,55 @@ function processCommand(command) {
     }
 }
 
-function startPeriodicUpdates() {
-    sendTabData(); // Immediately
-    chrome.alarms.create('tabUpdate', { periodInMinutes: CONFIG.updateInterval / 60000 });
+// W-42: Event-driven tab updates + 30s heartbeat (no 5s polling)
+let tabUpdateDebounceTimer = null;
+function scheduleTabDataSend() {
+    if (tabUpdateDebounceTimer) clearTimeout(tabUpdateDebounceTimer);
+    tabUpdateDebounceTimer = setTimeout(() => {
+        tabUpdateDebounceTimer = null;
+        sendTabData();
+    }, CONFIG.tabUpdateDebounceMs);
+}
+
+// Lightweight connection check for heartbeat (no full tab payload)
+function heartbeatConnectionCheck() {
+    if (!CONFIG.useHttpPost) return;
+    fetch(CONFIG.statusUrl, { method: 'GET', headers: { 'Cache-Control': 'no-cache' } })
+        .then(response => {
+            if (response.ok) {
+                markServerReachable();
+                updateIcon(true);
+            } else {
+                markServerUnreachable();
+                updateIcon(false);
+            }
+        })
+        .catch(() => {
+            markServerUnreachable();
+            updateIcon(false);
+        });
+}
+
+function startEventDrivenUpdates() {
+    sendTabData(); // Once on boot
+    setInterval(heartbeatConnectionCheck, CONFIG.heartbeatIntervalMs);
+    // Fallback: ensure full tab snapshot at least every 5 min for dashboard/monitoring
+    setInterval(sendTabData, CONFIG.tabSnapshotFallbackMs);
 }
 
 // Initial boot
-chrome.runtime.onInstalled.addListener(startPeriodicUpdates);
-chrome.runtime.onStartup.addListener(startPeriodicUpdates);
+chrome.runtime.onInstalled.addListener(startEventDrivenUpdates);
+chrome.runtime.onStartup.addListener(startEventDrivenUpdates);
 
-// Alarm for periodic updates
-chrome.alarms.onAlarm.addListener(alarm => {
-    if (alarm.name === 'tabUpdate') {
-        sendTabData();
-    }
-});
-
-// Enhanced tab event listeners with real-time streaming
+// Tab event listeners drive full snapshot (debounced) — W-42
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
     queueTabEvent('tab_removed', { tabId, removeInfo });
-    sendTabData(); // Still send full update for removed tabs
+    scheduleTabDataSend();
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
     queueTabEvent('tab_activated', activeInfo);
+    scheduleTabDataSend();
 });
 
 chrome.windows.onFocusChanged.addListener((windowId) => {
@@ -382,11 +409,9 @@ function checkForCommands() {
         });
 }
 
-// Add command check to alarm listener
+// Add command check to alarm listener (tabUpdate removed — W-42 event-driven)
 chrome.alarms.onAlarm.addListener(alarm => {
-    if (alarm.name === 'tabUpdate') {
-        sendTabData();
-    } else if (alarm.name === 'commandCheck') {
+    if (alarm.name === 'commandCheck') {
         checkForCommands();
     }
 });
@@ -840,7 +865,8 @@ async function shouldBlockUrlWithReason(url, tabId = null) {
 // Enhanced tab creation listener with real-time event streaming
 chrome.tabs.onCreated.addListener(async (tab) => {
     queueTabEvent('tab_created', tab);
-    
+    scheduleTabDataSend();
+
     if (!CONFIG.useRealTimeBlocking || !tab.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge')) return;
     
     debugLog(`New tab created: ${tab.url} (ID: ${tab.id})`);
@@ -858,8 +884,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // Send real-time event for significant changes
     if (changeInfo.url || changeInfo.status === 'complete') {
         queueTabEvent('tab_updated', { tabId, changeInfo, tab });
+        scheduleTabDataSend();
     }
-    
+
     if (!CONFIG.useRealTimeBlocking) return;
     
     // Check blocking on URL change OR when loading starts (to catch navigations)

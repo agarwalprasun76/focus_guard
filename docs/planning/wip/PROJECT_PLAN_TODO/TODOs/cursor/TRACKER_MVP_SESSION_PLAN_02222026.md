@@ -17,7 +17,7 @@
 | phase1-email-multi | Phase 1.4: Verify/fix multiple email recipients support | ✅ Completed | 2026-02-22 |
 | phase2-bugs | Phase 2.1–2.2: Fix BUG-012 (devices page) + BUG-015 (friction readability) | ✅ Completed | 2026-02-22 |
 | phase3-blocked | Phase 3.1: Verify/fix budget context on blocked page (W-60 / BUG-018) | ✅ Completed | 2026-02-22 |
-| phase3-extension | Phase 3.2: Extension polling optimization (W-42) | ⬜ Pending | — |
+| phase3-extension | Phase 3.2: Extension polling optimization (W-42) | ✅ Completed | 2026-02-22 |
 | phase3-feedback-ui | Phase 3.3: Classification feedback from blocked page (W-40) | ⬜ Pending | — |
 | phase4-feedback | Phase 4.1 Layer 1: Classification feedback endpoint + blocked page button | ⬜ Pending | — |
 | phase4-cache | Phase 4.2: Persistent classification cache (SQLite-backed) | ⬜ Pending | — |
