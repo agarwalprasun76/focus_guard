@@ -138,6 +138,8 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_activity_logs(params)
         elif path == "/api/activity/stats":
             self._handle_get_activity_stats(params)
+        elif path == "/api/activity/apps":
+            self._handle_get_app_usage(params)
         elif path == "/api/distraction/budget":
             self._handle_get_distraction_budget()
         elif path == "/api/distraction/sites":
@@ -1092,30 +1094,49 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             mgr = get_domain_config_manager()
 
             all_domains = mgr.get_all_known_domains()
+            always_allowed = mgr.get_always_allowed_domains()
+            per_rules = mgr.get_per_domain_rules()
 
             # Enrich with today's usage from tracker
+            usage_stats: Dict[str, Any] = {}
             try:
                 from .domain_usage_tracker import get_domain_usage_tracker
                 tracker = get_domain_usage_tracker()
                 usage_stats = tracker.get_daily_stats()  # all domains
-                for entry in all_domains:
-                    d = entry["domain"]
-                    if d in usage_stats:
-                        s = usage_stats[d]
-                        entry["time_used_today_seconds"] = s.get("total_active_seconds", 0)
-                        entry["overrides_used_today"] = s.get("override_count", 0)
-                    else:
-                        entry["time_used_today_seconds"] = 0
-                        entry["overrides_used_today"] = 0
             except Exception:
                 pass
 
-            # Enrich with budget info from per-domain rules
-            per_rules = mgr.get_per_domain_rules()
+            # Collect categories for the frontend filter dropdown
+            categories_set: set = set()
+
             for entry in all_domains:
                 d = entry["domain"]
-                if d in per_rules:
-                    entry["per_domain_rule"] = per_rules[d]
+                cat = entry.get("category", "unknown")
+                categories_set.add(cat)
+
+                # Frontend-expected fields
+                entry["whitelisted"] = d in always_allowed
+                entry["blocked"] = entry.get("status") == "blocked"
+
+                # Budget: extract max_cumulative_time_seconds from per-domain rule
+                rule = per_rules.get(d) or entry.get("per_domain_rule")
+                if rule and rule.get("max_cumulative_time_seconds"):
+                    entry["budget_seconds"] = rule["max_cumulative_time_seconds"]
+                else:
+                    entry["budget_seconds"] = None
+
+                # Usage stats
+                if d in usage_stats:
+                    s = usage_stats[d]
+                    entry["usage_seconds"] = s.get("total_active_seconds", 0)
+                    entry["visit_count"] = s.get("visit_count", s.get("override_count", 0))
+                    entry["time_used_today_seconds"] = entry["usage_seconds"]
+                    entry["overrides_used_today"] = s.get("override_count", 0)
+                else:
+                    entry["usage_seconds"] = 0
+                    entry["visit_count"] = 0
+                    entry["time_used_today_seconds"] = 0
+                    entry["overrides_used_today"] = 0
 
             # Apply filters
             category_filter = params.get("category")
@@ -1128,6 +1149,7 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             self._set_headers(HTTPStatus.OK)
             self.wfile.write(json.dumps({
                 "domains": all_domains,
+                "categories": sorted(categories_set),
                 "total": len(all_domains),
             }).encode("utf-8"))
         except Exception as exc:
@@ -1159,11 +1181,14 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             mgr = get_domain_config_manager()
 
             data = self._read_json_body()
+            # Accept both singular "domain" and plural "domains"
             domains = data.get("domains", [])
+            if not domains and data.get("domain"):
+                domains = [data["domain"]]
             category = data.get("category", "")
             if not domains or not category:
                 self._set_headers(HTTPStatus.BAD_REQUEST)
-                self.wfile.write(json.dumps({"error": "domains and category are required"}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": "domain(s) and category are required"}).encode("utf-8"))
                 return
 
             mgr.move_domains_to_category(domains, category)
@@ -1221,10 +1246,17 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": "domain is required"}).encode("utf-8"))
                 return
 
+            # Accept "daily_seconds" from admin UI and map to max_cumulative_time_seconds
+            daily_seconds = data.get("daily_seconds")
+            if daily_seconds is not None:
+                cumulative = int(daily_seconds)
+            else:
+                cumulative = data.get("max_cumulative_time_seconds", 900)
+
             rule = {
                 "max_overrides_per_day": data.get("max_overrides_per_day", 3),
                 "max_override_duration_seconds": data.get("max_override_duration_seconds", 300),
-                "max_cumulative_time_seconds": data.get("max_cumulative_time_seconds", 900),
+                "max_cumulative_time_seconds": cumulative,
                 "penalty_per_extra_override_seconds": data.get("penalty_per_extra_override_seconds", 60),
             }
             mgr.set_per_domain_rule(domain, rule)
@@ -1247,14 +1279,26 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             mgr = get_domain_config_manager()
 
             data = self._read_json_body()
-            key = data.get("key", "")  # e.g. "GAMING:DISTRACTION"
+            # Accept both "key" (e.g. "GAMING:DISTRACTION") and "classification" (e.g. "Entertainment")
+            key = data.get("key", "")
+            if not key and data.get("classification"):
+                # Map simple classification name to key format (CATEGORY:DISTRACTION)
+                classification = data["classification"].upper()
+                key = f"{classification}:DISTRACTION"
             if not key or ":" not in key:
                 self._set_headers(HTTPStatus.BAD_REQUEST)
-                self.wfile.write(json.dumps({"error": "key (CATEGORY:USEFULNESS) is required"}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": "key (CATEGORY:USEFULNESS) or classification is required"}).encode("utf-8"))
                 return
 
+            # Accept "daily_seconds" from admin UI and map to max_cumulative_time_seconds
+            daily_seconds = data.get("daily_seconds")
+            if daily_seconds is not None:
+                cumulative = int(daily_seconds)
+            else:
+                cumulative = data.get("max_cumulative_time_seconds", 900)
+
             budget = {
-                "max_cumulative_time_seconds": data.get("max_cumulative_time_seconds", 900),
+                "max_cumulative_time_seconds": cumulative,
                 "max_overrides_per_day": data.get("max_overrides_per_day", 3),
                 "max_override_duration_seconds": data.get("max_override_duration_seconds", 300),
                 "penalty_per_extra_override_seconds": data.get("penalty_per_extra_override_seconds", 60),
@@ -1459,6 +1503,263 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             logger.exception("Failed to get activity stats: %s", exc)
             self._set_headers(HTTPStatus.INTERNAL_SERVER_ERROR)
             self.wfile.write(json.dumps({"error": str(exc)}).encode("utf-8"))
+
+    # ------------------------------------------------------------------
+    # App Usage Handler (non-browser application activity)
+    # ------------------------------------------------------------------
+    def _handle_get_app_usage(self, params: Dict[str, str]) -> None:
+        """Get application usage summary from the activity database.
+
+        Query params:
+            date: YYYY-MM-DD (default today) — single day query
+            start_date: YYYY-MM-DD — range start (inclusive)
+            end_date: YYYY-MM-DD — range end (inclusive)
+            limit: max apps to return (default 30)
+        If start_date and end_date are provided, returns aggregated data
+        across the range plus a per-day breakdown.
+        """
+        try:
+            import os
+            import sqlite3
+            from datetime import date as _date, timedelta
+
+            limit = min(100, max(1, int(params.get("limit", "30"))))
+
+            # Determine date range
+            start_date = params.get("start_date", "")
+            end_date = params.get("end_date", "")
+            single_date = params.get("date", "")
+
+            if start_date and end_date:
+                is_range = True
+                date_str = start_date  # for response
+            else:
+                is_range = False
+                date_str = single_date or _date.today().isoformat()
+                start_date = date_str
+                end_date = date_str
+
+            # Locate usage.db written by EnhancedActivityLogger.
+            # Check multiple candidate paths because the logger may write to
+            # different locations depending on how FocusGuard was started
+            # (service vs tray-app vs dev).
+            local_app = os.environ.get("LOCALAPPDATA", "")
+            program_data = os.environ.get("PROGRAMDATA", "")
+            candidates = []
+            if local_app:
+                candidates.append(os.path.join(local_app, "FocusGuard", "usage.db"))
+            if program_data:
+                candidates.append(os.path.join(program_data, "FocusGuard", "usage.db"))
+            home = os.path.expanduser("~")
+            candidates.append(os.path.join(home, ".focus_guard", "usage.db"))
+            # Also check deployment config data directory
+            try:
+                from focus_guard.deployment.config import DeploymentConfig
+                cfg_dir = str(DeploymentConfig.load().storage.get_data_directory())
+                cfg_candidate = os.path.join(cfg_dir, "usage.db")
+                if cfg_candidate not in candidates:
+                    candidates.insert(0, cfg_candidate)
+            except Exception:
+                pass
+
+            db_path = None
+            for c in candidates:
+                if os.path.isfile(c):
+                    db_path = c
+                    break
+
+            if not db_path:
+                self._set_headers(HTTPStatus.OK)
+                self.wfile.write(json.dumps({
+                    "date": date_str,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "apps": [],
+                    "total_active_seconds": 0,
+                    "total_sessions": 0,
+                    "daily_breakdown": [],
+                    "message": "No activity database found yet. Data will appear once the activity monitor has been running.",
+                }).encode("utf-8"))
+                return
+
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+
+                # ── Primary: activity_samples (per-tick, most accurate) ──
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT 1 FROM sqlite_master
+                    WHERE type='table' AND name='activity_samples' LIMIT 1
+                    """
+                )
+                has_samples = cursor.fetchone() is not None
+
+                apps: list[dict] = []
+                total_active = 0.0
+                total_sessions = 0
+                daily_breakdown: list[dict] = []
+
+                if has_samples:
+                    ts_start = f"{start_date} 00:00:00"
+                    ts_end = f"{end_date} 23:59:59"
+                    cursor.execute(
+                        """
+                        SELECT app_name,
+                               SUM(sample_seconds) AS total_seconds,
+                               COUNT(*)            AS sample_count,
+                               MAX(domain)         AS last_domain,
+                               MAX(window_title)   AS last_title
+                        FROM activity_samples
+                        WHERE timestamp >= ? AND timestamp <= ?
+                        GROUP BY app_name
+                        ORDER BY total_seconds DESC
+                        LIMIT ?
+                        """,
+                        (ts_start, ts_end, limit),
+                    )
+                    for row in cursor.fetchall():
+                        secs = row["total_seconds"] or 0
+                        total_active += secs
+                        total_sessions += row["sample_count"] or 0
+                        apps.append({
+                            "app_name": row["app_name"],
+                            "active_seconds": round(secs, 1),
+                            "sample_count": row["sample_count"],
+                            "last_domain": row["last_domain"],
+                            "last_title": row["last_title"],
+                            "is_browser": self._is_browser_app(row["app_name"]),
+                        })
+
+                    if is_range:
+                        cursor.execute(
+                            """
+                            SELECT DATE(timestamp) AS day,
+                                   SUM(sample_seconds) AS total_seconds,
+                                   COUNT(DISTINCT app_name) AS app_count,
+                                   COUNT(*) AS sample_count
+                            FROM activity_samples
+                            WHERE timestamp >= ? AND timestamp <= ?
+                            GROUP BY DATE(timestamp)
+                            ORDER BY day
+                            """,
+                            (ts_start, ts_end),
+                        )
+                        for row in cursor.fetchall():
+                            day_str = row["day"]
+                            try:
+                                day_obj = _date.fromisoformat(day_str)
+                                day_name = day_obj.strftime("%A")
+                            except Exception:
+                                day_name = ""
+                            daily_breakdown.append({
+                                "date": day_str,
+                                "day_of_week": day_name,
+                                "total_seconds": round(row["total_seconds"] or 0, 1),
+                                "app_count": row["app_count"],
+                                "sample_count": row["sample_count"],
+                            })
+                else:
+                    ts_start = f"{start_date} 00:00:00"
+                    ts_end = f"{end_date} 23:59:59"
+                    cursor.execute(
+                        """
+                        SELECT app_name,
+                               SUM(active_duration) AS total_seconds,
+                               COUNT(*)             AS session_count,
+                               MAX(domain)          AS last_domain,
+                               MAX(window_title)    AS last_title,
+                               MAX(is_browser)      AS is_browser
+                        FROM usage_sessions
+                        WHERE start_time >= ? AND start_time <= ?
+                        GROUP BY app_name
+                        ORDER BY total_seconds DESC
+                        LIMIT ?
+                        """,
+                        (ts_start, ts_end, limit),
+                    )
+                    for row in cursor.fetchall():
+                        secs = row["total_seconds"] or 0
+                        total_active += secs
+                        total_sessions += row["session_count"] or 0
+                        apps.append({
+                            "app_name": row["app_name"],
+                            "active_seconds": round(secs, 1),
+                            "sample_count": row["session_count"],
+                            "last_domain": row["last_domain"],
+                            "last_title": row["last_title"],
+                            "is_browser": bool(row["is_browser"]),
+                        })
+
+                    if is_range:
+                        cursor.execute(
+                            """
+                            SELECT DATE(start_time) AS day,
+                                   SUM(active_duration) AS total_seconds,
+                                   COUNT(DISTINCT app_name) AS app_count,
+                                   COUNT(*) AS session_count
+                            FROM usage_sessions
+                            WHERE start_time >= ? AND start_time <= ?
+                            GROUP BY DATE(start_time)
+                            ORDER BY day
+                            """,
+                            (ts_start, ts_end),
+                        )
+                        for row in cursor.fetchall():
+                            day_str = row["day"]
+                            try:
+                                day_obj = _date.fromisoformat(day_str)
+                                day_name = day_obj.strftime("%A")
+                            except Exception:
+                                day_name = ""
+                            daily_breakdown.append({
+                                "date": day_str,
+                                "day_of_week": day_name,
+                                "total_seconds": round(row["total_seconds"] or 0, 1),
+                                "app_count": row["app_count"],
+                                "session_count": row["session_count"],
+                            })
+
+                # ── Enrich with category from app_categories table ──
+                cursor.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_categories' LIMIT 1"
+                )
+                if cursor.fetchone():
+                    cat_map: dict[str, dict] = {}
+                    cursor.execute("SELECT app_name, category, subcategory, productivity_score FROM app_categories")
+                    for row in cursor.fetchall():
+                        cat_map[row["app_name"]] = {
+                            "category": row["category"],
+                            "subcategory": row["subcategory"],
+                            "productivity_score": row["productivity_score"],
+                        }
+                    for app in apps:
+                        info = cat_map.get(app["app_name"])
+                        if info:
+                            app["category"] = info["category"]
+                            app["subcategory"] = info["subcategory"]
+                            app["productivity_score"] = info["productivity_score"]
+
+            self._set_headers(HTTPStatus.OK)
+            self.wfile.write(json.dumps({
+                "date": date_str,
+                "start_date": start_date,
+                "end_date": end_date,
+                "apps": apps,
+                "total_active_seconds": round(total_active, 1),
+                "total_sessions": total_sessions,
+                "daily_breakdown": daily_breakdown,
+            }).encode("utf-8"))
+        except Exception as exc:
+            logger.exception("Failed to get app usage: %s", exc)
+            self._set_headers(HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.wfile.write(json.dumps({"error": str(exc)}).encode("utf-8"))
+
+    @staticmethod
+    def _is_browser_app(app_name: str) -> bool:
+        browsers = ("chrome", "firefox", "msedge", "opera", "safari", "brave", "vivaldi", "arc")
+        lower = (app_name or "").lower()
+        return any(b in lower for b in browsers)
 
     # ------------------------------------------------------------------
     # Master Distraction Budget Handlers
