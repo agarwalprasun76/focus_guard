@@ -296,6 +296,8 @@ class EmailReporter:
             'total_active_time': 0.0,
             'top_applications': [],
             'top_domains': [],
+            'blocked_count': 0,
+            'override_count': 0,
         }
 
         start_ts = start_time.strftime('%Y-%m-%d %H:%M:%S')
@@ -336,8 +338,7 @@ class EmailReporter:
                         SELECT COALESCE(SUM(sample_seconds), 0) as total_active_time,
                                COUNT(*) as sample_count
                         FROM activity_samples
-                        WHERE replace(substr(timestamp,1,19),'T',' ') >= ?
-                          AND replace(substr(timestamp,1,19),'T',' ') < ?
+                        WHERE timestamp >= ? AND timestamp < ?
                           AND is_foreground = 1
                         ''',
                         (start_ts, end_ts),
@@ -355,8 +356,7 @@ class EmailReporter:
                             '''
                             SELECT app_name, COALESCE(SUM(sample_seconds), 0) as total_time
                             FROM activity_samples
-                            WHERE replace(substr(timestamp,1,19),'T',' ') >= ?
-                              AND replace(substr(timestamp,1,19),'T',' ') < ?
+                            WHERE timestamp >= ? AND timestamp < ?
                               AND is_foreground = 1
                             GROUP BY app_name
                             ORDER BY total_time DESC
@@ -370,8 +370,7 @@ class EmailReporter:
                             '''
                             SELECT domain, COALESCE(SUM(sample_seconds), 0) as total_time
                             FROM activity_samples
-                            WHERE replace(substr(timestamp,1,19),'T',' ') >= ?
-                              AND replace(substr(timestamp,1,19),'T',' ') < ?
+                            WHERE timestamp >= ? AND timestamp < ?
                               AND is_foreground = 1
                               AND domain IS NOT NULL AND domain != ''
                             GROUP BY domain
@@ -493,6 +492,20 @@ class EmailReporter:
                                 for row in cursor.fetchall()
                             ]
 
+                # ── Blocking and override stats ──────────────────
+                try:
+                    has_blocking = cursor.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='blocking_events' LIMIT 1"
+                    ).fetchone()
+                    if has_blocking:
+                        row = cursor.execute(
+                            "SELECT COUNT(*) as cnt FROM blocking_events WHERE timestamp >= ? AND timestamp <= ?",
+                            (start_ts, end_ts),
+                        ).fetchone()
+                        stats['blocked_count'] = int(row['cnt'] or 0) if row else 0
+                except Exception:
+                    pass
+
         except Exception as e:
             logger.error(f"Error getting period stats: {e}")
 
@@ -537,12 +550,13 @@ class EmailReporter:
                                       start_time: datetime, end_time: datetime) -> str:
         """Generate HTML content for hourly report."""
         active_mins = stats['total_active_time'] / 60
+        admin_url = "http://127.0.0.1:58393/admin"
         
         html = f"""
         <html>
         <head>
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                body {{ font-family: Arial, sans-serif; margin: 20px; color: #2c3e50; }}
                 h1 {{ color: #2c3e50; }}
                 h2 {{ color: #34495e; border-bottom: 1px solid #eee; padding-bottom: 5px; }}
                 table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
@@ -551,6 +565,9 @@ class EmailReporter:
                 tr:nth-child(even) {{ background-color: #f9f9f9; }}
                 .summary {{ background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin: 10px 0; }}
                 .metric {{ font-size: 24px; font-weight: bold; color: #2980b9; }}
+                .alert {{ background-color: #fef3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 5px; margin: 10px 0; }}
+                .footer {{ color: #7f8c8d; font-size: 12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }}
+                .dashboard-link {{ display: inline-block; background-color: #3498db; color: white; padding: 8px 16px; border-radius: 5px; text-decoration: none; font-weight: bold; margin: 5px 0; }}
             </style>
         </head>
         <body>
@@ -569,6 +586,15 @@ class EmailReporter:
             </div>
         """
         
+        if active_mins <= 0:
+            html += f"""
+            <div class="alert">
+                <strong>⚠️ No activity detected</strong> during this period.
+                If you believe the computer was in use, FocusGuard may need attention.
+                <br><a href="{admin_url}" style="color: #856404;">Check FocusGuard status →</a>
+            </div>
+            """
+        
         if stats['top_applications']:
             html += """
             <h2>📱 Top Applications</h2>
@@ -576,8 +602,11 @@ class EmailReporter:
                 <tr><th>#</th><th>Application</th><th>Time (min)</th></tr>
             """
             for i, app in enumerate(stats['top_applications'], 1):
+                display_name = app['app_name']
+                if display_name.lower().endswith('.exe'):
+                    display_name = display_name[:-4]
                 mins = app['total_time'] / 60
-                html += f"<tr><td>{i}</td><td>{app['app_name']}</td><td>{mins:.1f}</td></tr>"
+                html += f"<tr><td>{i}</td><td>{display_name}</td><td>{mins:.1f}</td></tr>"
             html += "</table>"
         
         if stats['top_domains']:
@@ -590,12 +619,23 @@ class EmailReporter:
                 mins = domain['total_time'] / 60
                 html += f"<tr><td>{i}</td><td>{domain['domain']}</td><td>{mins:.1f}</td></tr>"
             html += "</table>"
+
+        blocked_count = stats.get('blocked_count', 0)
+        override_count = stats.get('override_count', 0)
+        if blocked_count > 0 or override_count > 0:
+            html += "<h2>🛡️ Blocking Activity</h2><div class='summary'>"
+            if blocked_count > 0:
+                html += f"<p>Sites blocked: <strong>{blocked_count}</strong></p>"
+            if override_count > 0:
+                html += f"<p>Overrides used: <strong>{override_count}</strong></p>"
+            html += "</div>"
         
-        html += """
-            <hr>
-            <p style="color: #7f8c8d; font-size: 12px;">
-                This report was automatically generated by FocusGuard Activity Monitor.
-            </p>
+        html += f"""
+            <div class="footer">
+                <p><a class="dashboard-link" href="{admin_url}">Open FocusGuard Dashboard</a></p>
+                <p>View detailed activity, manage rules, and adjust time budgets from the dashboard.</p>
+                <p>This report was automatically generated by FocusGuard Activity Monitor.</p>
+            </div>
         </body>
         </html>
         """
@@ -669,11 +709,22 @@ class EmailReporter:
                 html += f"<tr><td>{hour:02d}:00</td><td>{mins:.1f} min</td><td>{hour_data['sessions']}</td></tr>"
             html += "</table>"
         
-        html += """
-            <hr>
-            <p style="color: #7f8c8d; font-size: 12px;">
-                This report was automatically generated by FocusGuard Activity Monitor.
-            </p>
+        admin_url = "http://127.0.0.1:58393/admin"
+        if float(stats.get('total_active_time', 0)) <= 0:
+            html += f"""
+            <div style="background-color: #fef3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 5px; margin: 10px 0;">
+                <strong>⚠️ No activity detected</strong> for this day.
+                If you believe the computer was in use, FocusGuard may need attention.
+                <br><a href="{admin_url}" style="color: #856404;">Check FocusGuard status →</a>
+            </div>
+            """
+        
+        html += f"""
+            <div style="color: #7f8c8d; font-size: 12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+                <p><a href="{admin_url}" style="display: inline-block; background-color: #3498db; color: white; padding: 8px 16px; border-radius: 5px; text-decoration: none; font-weight: bold;">Open FocusGuard Dashboard</a></p>
+                <p>View detailed activity, manage rules, and adjust time budgets from the dashboard.</p>
+                <p>This report was automatically generated by FocusGuard Activity Monitor.</p>
+            </div>
         </body>
         </html>
         """

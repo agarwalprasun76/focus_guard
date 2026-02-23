@@ -1,3 +1,4 @@
+export * as activityApi from "./activity";
 export * as authApi from "./auth";
 export { requestJson, ApiClientError } from "./client";
 export * as dashboardApi from "./dashboard";

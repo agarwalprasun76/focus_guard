@@ -3,9 +3,10 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Dashboard" },
-  { to: "/exceptions", label: "Exceptions" },
-  { to: "/devices", label: "Devices" },
+  { to: "/", label: "Home" },
+  { to: "/app-activity", label: "App Activity" },
+  { to: "/overrides", label: "Rules & Overrides" },
+  { to: "/saved-links", label: "Saved Links" },
   { to: "/settings", label: "Settings" },
 ];
 

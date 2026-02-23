@@ -126,3 +126,24 @@ def set_domain_budget(
         return _svc(tab_server_client).set_domain_budget(payload)
     except SettingsServiceError as exc:
         raise translate_service_error(exc) from exc
+
+
+# ── Email configuration ───────────────────────────────────────────
+
+@router.get("/email")
+def get_email_config() -> dict[str, Any]:
+    try:
+        return SettingsService.get_email_config()
+    except SettingsServiceError as exc:
+        raise translate_service_error(exc) from exc
+
+
+@router.post("/email")
+def update_email_config(
+    payload: dict[str, Any],
+    _: dict[str, Any] = Depends(require_authenticated_admin),
+) -> dict[str, Any]:
+    try:
+        return SettingsService.update_email_config(payload)
+    except SettingsServiceError as exc:
+        raise translate_service_error(exc) from exc

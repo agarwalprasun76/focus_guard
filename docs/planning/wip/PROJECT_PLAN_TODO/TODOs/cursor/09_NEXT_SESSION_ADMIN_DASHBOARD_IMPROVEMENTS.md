@@ -1,6 +1,7 @@
 # Next Session: Admin Dashboard Improvements
 
 **Created**: February 21, 2026  
+**Last Updated**: February 22, 2026  
 **Purpose**: Handoff brief for the next Cursor AI agent session focused on making the admin console genuinely useful for a parent.
 
 ---
@@ -16,36 +17,59 @@ The admin console is at `admin_ui/` (React + Tailwind + TanStack Query SPA). The
 
 ---
 
-## What Was Completed (Feb 21)
+## What Was Completed (Feb 21-22)
 
-### Settings Page (Sprint 3 — Done)
+### Settings Page (Sprint 3 — Done, Feb 21)
 - **Enforcement mode toggle**: 3-card selector (Monitor Only / Warn / Block). Password prompt auto-appears on 403 failure from tab server. Backend: `settings_service.py` + `routers/settings.py` (8 endpoints).
 - **Budget controls**: Today's usage progress bar, master budget slider (15 min–4 hrs) with quick presets, per-category read-only display. 
 - **Domain management**: Searchable table with category dropdown, status filter (Allowed/Blocked/Budgeted/Tracked), Daily Budget column, Visits column, Always Allow / Remove Allow actions.
 
-### Email Fix (Sprint 4 — Done)
+### Email Fix (Sprint 4 — Done, Feb 21)
 - Fixed `_get_period_stats` in `deployment/email_reporter.py`: open-session WHERE clause, active-duration estimation, ISO timestamp normalization.
 
+### Dashboard Hero Redesign (Phase A — Done, Feb 22, by another agent)
+- Focus score ring with color coding (green/amber/red)
+- Natural-language summary sentence
+- Budget progress bar
+- Actionable alerts bar
+- **NOTE**: Needs runtime verification
+
+### Navigation & Terminology (Phase C — Partial, Feb 22)
+- "Exceptions" renamed to "Rules & Overrides" in nav and page title
+- Saved Links added to sidebar nav
+- Parent-friendly language applied throughout
+
+### Activity Logger Fix (Critical, Feb 22)
+- Root cause: `EnhancedActivityLogger` was only started in Windows Service path (`service.py`), NOT in tray-app path (`main.py`)
+- Fix: Added `start_activity_logger()` / `stop_activity_logger()` to `main.py`, wired into startup step 10a
+- Also added ProgramData + deployment config paths as candidates in tab server's `_handle_get_app_usage`
+
 ### Exe Rebuilt
-- `dist/FocusGuard.exe` includes all fixes.
+- `dist/FocusGuard.exe` rebuilt (Feb 21) but does NOT include Feb 22 changes yet
+
+### Known Regressions Introduced
+- **Domains page broken**: "unable to load domains" error — wiring issue from settings/domain management changes
+- **App activity tab empty**: Activity logger fix landed but needs rebuild to take effect
 
 ---
 
-## What Needs Work Next (Prioritized)
+## What Needs Work Next (Prioritized — Updated Feb 22)
 
-### P0: Dashboard Redesign (Doc 07, Phase A — 3-5 days)
+### P0: Fix Regressions (Immediate)
 
-The dashboard is the most-visited page but it's a data dump. Redesign it around two modes:
+1. **Domains page regression (BUG-021)**: "unable to load domains" error introduced during settings/domain management wiring. Debug and fix.
+2. **Rebuild exe**: Include activity logger fix + all Feb 22 changes.
+3. **Verify activity data pipeline**: After rebuild, confirm app activity tab and email reports show real data.
 
-1. **Hero summary section** (A1): Replace the 8-card grid with a single hero — focus score ring, natural-language summary sentence, budget progress bar, quick stats row. The data already comes from `GET /admin/api/v1/dashboard`.
+### P0: Dashboard Redesign Remaining Items (Doc 07, Phase A)
 
-2. **Alerts & actions bar** (A2): Replace "Attention Items" chips with actionable alerts — each alert has an icon, message, and action button (e.g., "reddit.com overridden 3 times → [Block Now]").
+Hero section (A1) and alerts bar (A2) are implemented. Remaining:
 
-3. **Activity timeline** (A3): Hourly bar chart showing the day's activity color-coded by category. Requires new backend endpoint `GET /api/activity/timeline?date=YYYY-MM-DD` or can be derived from existing `GET /api/analytics/heatmap`.
+1. **Activity timeline** (A3): Hourly bar chart showing the day's activity color-coded by category. Requires new backend endpoint `GET /api/activity/timeline?date=YYYY-MM-DD` or can be derived from existing `GET /api/analytics/heatmap`.
 
-4. **Collapsible detail sections** (A4): Move current cards into accordion sections, default collapsed.
+2. **Collapsible detail sections** (A4): Move current cards into accordion sections, default collapsed.
 
-5. **Date/time range selector** (A5): Presets (Today, Yesterday, This Week) + custom date range. Requires `start_date`/`end_date` query params on dashboard aggregation.
+3. **Date/time range selector** (A5): Presets (Today, Yesterday, This Week) + custom date range. Requires `start_date`/`end_date` query params on dashboard aggregation.
 
 **Key files**: `admin_ui/src/views/Dashboard.tsx`, `focus_guard/core/admin_gateway/services/dashboard_service.py`, `focus_guard/core/admin_gateway/routers/dashboard.py`
 
@@ -55,15 +79,16 @@ The dashboard is the most-visited page but it's a data dump. Redesign it around 
 
 2. **Per-domain budget editing** — clicking a domain in the table should allow setting a per-domain budget. Uses `POST /api/domains/budgets/domain` (already wired).
 
-3. **Email report configuration** — needs new admin gateway endpoint `POST /admin/api/v1/settings/email` that proxies to deployment config. UI: toggle, recipient email, frequency, test button.
+3. **Email report configuration** — needs new admin gateway endpoint `POST /admin/api/v1/settings/email` that proxies to deployment config. UI: toggle, recipient email(s), frequency, test button. **Support multiple recipients.**
 
 4. **Password change** — needs new endpoint `POST /admin/api/v1/settings/password`.
 
-### P1: Navigation & Terminology (Doc 07, Phase C)
+### P1: Navigation & Terminology Remaining (Doc 07, Phase C)
 
-1. Rename "Exceptions" → "Rules & Overrides" in nav and page title
-2. Add "Saved Links" to sidebar nav (currently missing)
-3. Use parent-friendly language throughout (see Doc 07 §3 terminology table)
+Partially done (rename + Saved Links nav). Remaining:
+1. Merge Devices into Dashboard (single device, no standalone page needed)
+2. Add dedicated Activity page (C4)
+3. Add Alerts/Notifications page (C5)
 
 ### P2: Exception/Override UX Polish (Doc 07, Phase D)
 
@@ -75,10 +100,12 @@ The dashboard is the most-visited page but it's a data dump. Redesign it around 
 
 1. Start `FocusGuard.exe` and open `http://127.0.0.1:58393/admin`
 2. Verify Settings page loads enforcement mode, budgets, and domains correctly
-3. Verify enforcement mode change with password works end-to-end
-4. Verify Exceptions page create/list/revoke works
-5. Check next hourly email for non-blank content
-6. Verify Devices page no longer shows INTERNAL_ERROR
+3. Verify domains page loads without error
+4. Verify enforcement mode change with password works end-to-end
+5. Verify Rules & Overrides page create/list/revoke works
+6. Verify app activity tab shows real data
+7. Check next hourly email for non-blank content with activity
+8. Verify Devices page no longer shows INTERNAL_ERROR
 
 ---
 

@@ -8,6 +8,7 @@ import { Exceptions } from "./views/Exceptions";
 import { LoginPage } from "./views/LoginPage";
 import { NotFoundPage } from "./views/NotFoundPage";
 import { SavedLinks } from "./views/SavedLinks";
+import { AppActivity } from "./views/AppActivity";
 import { Settings } from "./views/Settings";
 
 export function AppRouter() {
@@ -35,6 +36,7 @@ export function AppRouter() {
         <Route path="exceptions" element={<Exceptions />} />
         <Route path="overrides" element={<Exceptions />} />
         <Route path="devices" element={<Devices />} />
+        <Route path="app-activity" element={<AppActivity />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />

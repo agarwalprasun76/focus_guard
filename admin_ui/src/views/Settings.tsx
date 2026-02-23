@@ -340,20 +340,80 @@ function BudgetSection() {
       {Object.keys(classificationBudgets).length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-medium text-gray-700">Per-Category Budgets</p>
-          <div className="mt-2 space-y-1.5">
-            {Object.entries(classificationBudgets).map(([cat, b]) => {
-              const secs = typeof b?.daily_seconds === "number" ? b.daily_seconds : null;
-              return (
-                <div key={cat} className="flex items-center justify-between text-sm">
-                  <span className="capitalize text-gray-600">{cat.replace(/_/g, " ")}</span>
-                  <span className="text-gray-500">{formatMinutes(secs)}</span>
-                </div>
-              );
-            })}
+          <p className="text-[10px] text-gray-400">Adjust daily limits for each content category.</p>
+          <div className="mt-3 space-y-4">
+            {Object.entries(classificationBudgets).map(([cat, b]) => (
+              <CategoryBudgetRow key={cat} classification={cat} currentSeconds={b?.daily_seconds ?? 0} />
+            ))}
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+// ── Per-Category Budget Row ───────────────────────────────────────
+
+function CategoryBudgetRow({ classification, currentSeconds }: { classification: string; currentSeconds: number }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState<number | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: ({ classification, daily_seconds }: { classification: string; daily_seconds: number }) =>
+      settingsApi.updateClassificationBudget(classification, daily_seconds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings-budgets"] });
+      setValue(null);
+    },
+  });
+
+  const display = value ?? currentSeconds;
+  const changed = value !== null && value !== currentSeconds;
+  // Convert "ENTERTAINMENT:DISTRACTION" → "Entertainment"
+  const rawLabel = classification.split(":")[0].replace(/_/g, " ");
+  const label = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1).toLowerCase();
+
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="capitalize text-gray-700 font-medium">{label}</span>
+        <span className="text-gray-500 font-semibold">{formatMinutes(display)}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={14400}
+        step={300}
+        value={display}
+        onChange={(e) => setValue(Number(e.target.value))}
+        className="mt-1 w-full accent-ocean"
+      />
+      <div className="flex justify-between text-[10px] text-gray-400">
+        <span>Off</span>
+        <span>4 hours</span>
+      </div>
+      {changed && (
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate({ classification, daily_seconds: value! })}
+            className="rounded-md bg-ocean px-3 py-1 text-xs font-semibold text-white hover:bg-ocean/90 disabled:opacity-50"
+          >
+            {mutation.isPending ? "Saving..." : "Save"}
+          </button>
+          <button type="button" onClick={() => setValue(null)} className="text-xs text-gray-500 hover:text-gray-700">
+            Reset
+          </button>
+        </div>
+      )}
+      {mutation.isError && (
+        <p className="mt-1 text-xs text-red-600">
+          {mutation.error instanceof ApiClientError ? mutation.error.message : "Failed to update"}
+        </p>
+      )}
+      {mutation.isSuccess && <p className="mt-1 text-xs text-emerald-600">Saved.</p>}
+    </div>
   );
 }
 
@@ -382,6 +442,11 @@ function DomainSection() {
 
   const categoryMut = useMutation({
     mutationFn: settingsApi.setDomainCategory,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings-domains"] }),
+  });
+
+  const budgetMut = useMutation({
+    mutationFn: settingsApi.setDomainBudget,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings-domains"] }),
   });
 
@@ -482,8 +547,9 @@ function DomainSection() {
                   entry={d}
                   onToggleWhitelist={(domain, add) => whitelistMut.mutate({ domain, action: add ? "add" : "remove" })}
                   onSetCategory={(domain, category) => categoryMut.mutate({ domain, category })}
+                  onSetBudget={(domain, daily_seconds) => budgetMut.mutate({ domain, daily_seconds })}
                   categories={categories}
-                  busy={whitelistMut.isPending || categoryMut.isPending}
+                  busy={whitelistMut.isPending || categoryMut.isPending || budgetMut.isPending}
                 />
               ))}
             </tbody>
@@ -503,15 +569,19 @@ function DomainRow({
   entry,
   onToggleWhitelist,
   onSetCategory,
+  onSetBudget,
   categories,
   busy,
 }: {
   entry: DomainEntry;
   onToggleWhitelist: (domain: string, add: boolean) => void;
   onSetCategory: (domain: string, category: string) => void;
+  onSetBudget: (domain: string, daily_seconds: number) => void;
   categories: string[];
   busy: boolean;
 }) {
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [budgetValue, setBudgetValue] = useState(entry.budget_seconds ?? 0);
   const status = deriveStatus(entry);
 
   const statusBadge =
@@ -549,7 +619,46 @@ function DomainRow({
         </span>
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
-        {entry.budget_seconds != null && entry.budget_seconds > 0 ? formatMinutes(entry.budget_seconds) : "—"}
+        {editingBudget ? (
+          <div className="flex items-center justify-end gap-1">
+            <select
+              value={budgetValue}
+              onChange={(e) => setBudgetValue(Number(e.target.value))}
+              className="rounded border border-slate-200 px-1 py-0.5 text-xs"
+            >
+              <option value={0}>No limit</option>
+              <option value={900}>15 min</option>
+              <option value={1800}>30 min</option>
+              <option value={2700}>45 min</option>
+              <option value={3600}>1 hour</option>
+              <option value={7200}>2 hours</option>
+            </select>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => { onSetBudget(entry.domain, budgetValue); setEditingBudget(false); }}
+              className="rounded bg-ocean px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-ocean/90 disabled:opacity-40"
+            >
+              Set
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingBudget(false)}
+              className="text-[10px] text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => { setBudgetValue(entry.budget_seconds ?? 0); setEditingBudget(true); }}
+            className="text-gray-500 hover:text-ocean hover:underline"
+            title="Click to set daily budget"
+          >
+            {entry.budget_seconds != null && entry.budget_seconds > 0 ? formatMinutes(entry.budget_seconds) : "—"}
+          </button>
+        )}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
         {entry.usage_seconds != null ? formatMinutes(entry.usage_seconds) : "—"}
@@ -575,6 +684,213 @@ function DomainRow({
   );
 }
 
+// ── Email Config Section ──────────────────────────────────────────
+
+function EmailSection() {
+  const queryClient = useQueryClient();
+  const [editingRecipients, setEditingRecipients] = useState(false);
+  const [recipientsInput, setRecipientsInput] = useState("");
+  const [testStatus, setTestStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const emailQ = useQuery({
+    queryKey: ["settings-email"],
+    queryFn: settingsApi.getEmailConfig,
+    retry: 1,
+  });
+
+  const mutation = useMutation({
+    mutationFn: settingsApi.updateEmailConfig,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings-email"] });
+      setEditingRecipients(false);
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: () => settingsApi.updateEmailConfig({ test: true } as any),
+    onSuccess: () => setTestStatus("sent"),
+    onError: () => setTestStatus("error"),
+    onMutate: () => setTestStatus("sending"),
+  });
+
+  if (emailQ.isLoading) return <LoadingState label="email settings" />;
+  if (emailQ.isError) {
+    return (
+      <section className="space-y-3">
+        <h3 className="font-display text-lg text-ink">Email Reports</h3>
+        <ErrorState
+          message={emailQ.error instanceof ApiClientError ? emailQ.error.message : "Unable to load email config"}
+        />
+      </section>
+    );
+  }
+
+  const cfg = emailQ.data!;
+
+  function startEditRecipients() {
+    setRecipientsInput(cfg.recipients.join(", "));
+    setEditingRecipients(true);
+  }
+
+  function saveRecipients() {
+    const parsed = recipientsInput
+      .split(",")
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0 && r.includes("@"));
+    mutation.mutate({ recipients: parsed });
+  }
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="font-display text-lg text-ink">Email Reports</h3>
+        <p className="text-xs text-gray-500">Receive activity reports by email.</p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+        {/* Enable toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Email reports</p>
+            <p className="text-[10px] text-gray-400">
+              {cfg.is_configured ? "Configured and ready" : "Not fully configured — check SMTP settings"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => mutation.mutate({ enabled: !cfg.enabled })}
+            disabled={mutation.isPending}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+              cfg.enabled ? "bg-ocean" : "bg-slate-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                cfg.enabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Recipients — editable */}
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-gray-600">Recipients</p>
+            {!editingRecipients && (
+              <button
+                type="button"
+                onClick={startEditRecipients}
+                className="text-[10px] font-medium text-ocean hover:underline"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+          {editingRecipients ? (
+            <div className="mt-1 space-y-2">
+              <input
+                type="text"
+                value={recipientsInput}
+                onChange={(e) => setRecipientsInput(e.target.value)}
+                placeholder="parent@email.com, guardian@email.com"
+                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              />
+              <p className="text-[10px] text-gray-400">Separate multiple emails with commas</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={mutation.isPending}
+                  onClick={saveRecipients}
+                  className="rounded-md bg-ocean px-3 py-1 text-xs font-semibold text-white hover:bg-ocean/90 disabled:opacity-50"
+                >
+                  {mutation.isPending ? "Saving..." : "Save Recipients"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingRecipients(false)}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-0.5 text-sm text-gray-800">
+              {cfg.recipients.length > 0 ? cfg.recipients.join(", ") : "No recipients configured"}
+            </p>
+          )}
+        </div>
+
+        {/* Schedule summary */}
+        <div className="flex flex-wrap gap-3">
+          <div className="rounded-lg bg-slate-50 px-3 py-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">Hourly</span>
+            <p className="text-xs font-semibold text-gray-700">
+              {cfg.schedule.hourly_enabled ? `Every ${cfg.schedule.hourly_interval_minutes} min` : "Off"}
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">Daily</span>
+            <p className="text-xs font-semibold text-gray-700">
+              {cfg.schedule.daily_enabled ? `At ${cfg.schedule.daily_hour}:00` : "Off"}
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">SMTP</span>
+            <p className="text-xs font-semibold text-gray-700">{cfg.smtp_server}:{cfg.smtp_port}</p>
+          </div>
+        </div>
+
+        {/* Quick toggles for schedule */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate({ schedule: { hourly_enabled: !cfg.schedule.hourly_enabled } })}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              cfg.schedule.hourly_enabled
+                ? "bg-ocean text-white"
+                : "border border-slate-200 text-gray-600 hover:bg-slate-50"
+            }`}
+          >
+            {cfg.schedule.hourly_enabled ? "Hourly: On" : "Hourly: Off"}
+          </button>
+          <button
+            type="button"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate({ schedule: { daily_enabled: !cfg.schedule.daily_enabled } })}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              cfg.schedule.daily_enabled
+                ? "bg-ocean text-white"
+                : "border border-slate-200 text-gray-600 hover:bg-slate-50"
+            }`}
+          >
+            {cfg.schedule.daily_enabled ? "Daily: On" : "Daily: Off"}
+          </button>
+          <button
+            type="button"
+            disabled={testMutation.isPending || !cfg.is_configured}
+            onClick={() => testMutation.mutate()}
+            className="rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-slate-50 disabled:opacity-40"
+          >
+            {testStatus === "sending" ? "Sending..." : "Send Test Email"}
+          </button>
+        </div>
+
+        {testStatus === "sent" && <p className="text-xs text-emerald-600">Test email sent! Check your inbox.</p>}
+        {testStatus === "error" && <p className="text-xs text-red-600">Failed to send test email. Check SMTP settings.</p>}
+
+        {mutation.isError && (
+          <p className="text-xs text-red-600">
+            {mutation.error instanceof ApiClientError ? mutation.error.message : "Failed to update email settings"}
+          </p>
+        )}
+        {mutation.isSuccess && <p className="text-xs text-emerald-600">Email settings updated.</p>}
+      </div>
+    </section>
+  );
+}
+
 // ── Main Settings Page ────────────────────────────────────────────
 
 export function Settings() {
@@ -595,6 +911,10 @@ export function Settings() {
       <hr className="border-slate-200" />
 
       <DomainSection />
+
+      <hr className="border-slate-200" />
+
+      <EmailSection />
     </div>
   );
 }

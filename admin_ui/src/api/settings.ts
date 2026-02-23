@@ -133,3 +133,46 @@ export function setDomainBudget(input: SetDomainBudgetInput): Promise<Record<str
     body: input,
   });
 }
+
+// ── Email configuration ──────────────────────────────────────────
+
+export type EmailConfigResponse = {
+  enabled: boolean;
+  smtp_server: string;
+  smtp_port: number;
+  sender_email: string;
+  recipients: string[];
+  is_configured: boolean;
+  schedule: {
+    hourly_enabled: boolean;
+    hourly_interval_minutes: number;
+    daily_enabled: boolean;
+    daily_hour: number;
+  };
+};
+
+export type UpdateEmailConfigInput = {
+  enabled?: boolean;
+  recipients?: string[];
+  smtp_server?: string;
+  smtp_port?: number;
+  sender_email?: string;
+  smtp_username?: string;
+  smtp_password?: string;
+  schedule?: {
+    hourly_enabled?: boolean;
+    daily_enabled?: boolean;
+    hourly_interval_minutes?: number;
+  };
+};
+
+export function getEmailConfig(): Promise<EmailConfigResponse> {
+  return requestJson<EmailConfigResponse>("/settings/email");
+}
+
+export function updateEmailConfig(input: UpdateEmailConfigInput): Promise<Record<string, unknown>> {
+  return requestJson("/settings/email", {
+    method: "POST",
+    body: input,
+  });
+}

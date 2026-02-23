@@ -129,8 +129,8 @@ export function Exceptions() {
       {!online ? <OfflineState message="You are offline. Exception list polling will resume once network is restored." /> : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl text-ink">Exceptions</h2>
-          <p className="text-sm text-gray-600">Create temporary, permanent, budgeted, or block actions from one modal.</p>
+          <h2 className="font-display text-2xl text-ink">Rules & Overrides</h2>
+          <p className="text-sm text-gray-600">Allow or block specific sites. Create temporary access, set daily limits, or block permanently.</p>
         </div>
         <button
           type="button"
@@ -144,20 +144,20 @@ export function Exceptions() {
             setIsModalOpen(true);
           }}
         >
-          Add Exception
+          New Rule
         </button>
       </div>
 
       {successItem ? (
         <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Created {successItem.type} exception for <strong>{successItem.domain}</strong> ({successItem.status})
+          Created {successItem.type} rule for <strong>{successItem.domain}</strong> ({successItem.status})
         </div>
       ) : null}
 
       {requestError && !isModalOpen ? <ErrorState message={requestError} /> : null}
 
       <div className="rounded-xl border border-slate-300 p-4 text-sm text-gray-600">
-        Manage live exceptions below. You can revoke active items directly from the list.
+        Manage active rules below. You can revoke any active rule directly from the list.
       </div>
 
       <section className="rounded-xl border border-slate-300 p-4">
@@ -230,8 +230,8 @@ export function Exceptions() {
             aria-describedby="create-exception-desc"
             className="w-full max-w-lg rounded-2xl border border-slate-300 bg-white p-5 shadow-xl"
           >
-            <h3 id="create-exception-title" className="font-display text-xl text-ink">Create Exception</h3>
-            <p id="create-exception-desc" className="mt-1 text-xs text-gray-500">Modes: temporary, permanent, budgeted, block</p>
+            <h3 id="create-exception-title" className="font-display text-xl text-ink">New Rule</h3>
+            <p id="create-exception-desc" className="mt-1 text-xs text-gray-500">Allow temporarily, set a daily limit, allow always, or block a site.</p>
 
             <div className="mt-4 space-y-3">
               <label className="block text-sm font-medium text-gray-700" htmlFor="domain">
@@ -256,24 +256,33 @@ export function Exceptions() {
                 value={form.type}
                 onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value as ExceptionType }))}
               >
-                <option value="temporary">temporary</option>
-                <option value="permanent">permanent</option>
-                <option value="budgeted">budgeted</option>
-                <option value="block">block</option>
+                <option value="temporary">Allow temporarily</option>
+                <option value="permanent">Always allow</option>
+                <option value="budgeted">Daily time limit</option>
+                <option value="block">Block</option>
               </select>
 
               {form.type === "temporary" ? (
                 <>
                   <label className="block text-sm font-medium text-gray-700" htmlFor="duration_seconds">
-                    Duration (seconds)
+                    How long?
                   </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[{l:"5 min",v:"300"},{l:"15 min",v:"900"},{l:"30 min",v:"1800"},{l:"1 hour",v:"3600"},{l:"2 hours",v:"7200"}].map(p=>(
+                      <button key={p.v} type="button" onClick={()=>setForm(prev=>({...prev,durationSeconds:p.v}))}
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                          form.durationSeconds===p.v ? "bg-ocean text-white" : "border border-slate-200 text-gray-600 hover:bg-slate-50"
+                        }`}>{p.l}</button>
+                    ))}
+                  </div>
                   <input
                     id="duration_seconds"
                     type="number"
                     min={1}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     value={form.durationSeconds}
                     onChange={(event) => setForm((prev) => ({ ...prev, durationSeconds: event.target.value }))}
+                    placeholder="Custom seconds"
                   />
                 </>
               ) : null}
@@ -281,15 +290,24 @@ export function Exceptions() {
               {form.type === "budgeted" ? (
                 <>
                   <label className="block text-sm font-medium text-gray-700" htmlFor="budget_seconds_per_day">
-                    Daily Budget (seconds)
+                    Daily limit
                   </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[{l:"15 min",v:"900"},{l:"30 min",v:"1800"},{l:"45 min",v:"2700"},{l:"1 hour",v:"3600"},{l:"2 hours",v:"7200"}].map(p=>(
+                      <button key={p.v} type="button" onClick={()=>setForm(prev=>({...prev,budgetSecondsPerDay:p.v}))}
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                          form.budgetSecondsPerDay===p.v ? "bg-ocean text-white" : "border border-slate-200 text-gray-600 hover:bg-slate-50"
+                        }`}>{p.l}</button>
+                    ))}
+                  </div>
                   <input
                     id="budget_seconds_per_day"
                     type="number"
                     min={0}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     value={form.budgetSecondsPerDay}
                     onChange={(event) => setForm((prev) => ({ ...prev, budgetSecondsPerDay: event.target.value }))}
+                    placeholder="Custom seconds"
                   />
                 </>
               ) : null}

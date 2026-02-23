@@ -11,6 +11,7 @@ def include_routers(app: Any) -> None:
     The app is typed as Any to keep P2-01 scaffold import-light.
     """
 
+    from focus_guard.core.admin_gateway.routers.activity import router as activity_router
     from focus_guard.core.admin_gateway.routers.auth import router as auth_router
     from focus_guard.core.admin_gateway.routers.dashboard import router as dashboard_router
     from focus_guard.core.admin_gateway.routers.devices import router as devices_router
@@ -24,3 +25,4 @@ def include_routers(app: Any) -> None:
     app.include_router(exceptions_router)
     app.include_router(devices_router)
     app.include_router(settings_router)
+    app.include_router(activity_router)

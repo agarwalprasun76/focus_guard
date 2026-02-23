@@ -555,6 +555,63 @@ def stop_email_scheduler() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Activity logger (EnhancedActivityLogger — writes usage.db)
+# ---------------------------------------------------------------------------
+
+_activity_logger_instance = None
+
+
+def start_activity_logger() -> None:
+    """Start the EnhancedActivityLogger so app usage is written to usage.db.
+
+    This is the same logger that ``ActivityMonitorService`` starts when running
+    as a Windows service.  In the tray-app flow (``main()``) the coordinator
+    only polls window info for event-bus events but does **not** persist
+    per-tick samples.  Starting the enhanced logger here closes that gap so
+    both the admin portal App Activity view and email reports have data.
+    """
+    global _activity_logger_instance
+
+    try:
+        from focus_guard.core.activity.enhanced_logger import EnhancedActivityLogger
+        from focus_guard.core.activity.idle_detector import IdleConfiguration
+
+        # Use deployment config for sampling interval; let EnhancedActivityLogger
+        # pick its default log_dir (LOCALAPPDATA/FocusGuard on Windows) so the DB
+        # stays in the same location the tab server and email reporter look for it.
+        sampling_interval = 5
+        try:
+            from focus_guard.deployment.config import DeploymentConfig
+            cfg = DeploymentConfig.load()
+            sampling_interval = cfg.monitoring.sampling_interval
+        except Exception:
+            pass
+
+        _activity_logger_instance = EnhancedActivityLogger(
+            interval_seconds=sampling_interval,
+        )
+        _activity_logger_instance.start()
+        logger.info(
+            "Activity logger started (interval=%ds, db=%s)",
+            sampling_interval,
+            _activity_logger_instance.database.db_path,
+        )
+    except Exception:
+        logger.exception("Failed to start activity logger")
+
+
+def stop_activity_logger() -> None:
+    """Stop the EnhancedActivityLogger."""
+    global _activity_logger_instance
+    if _activity_logger_instance is not None:
+        try:
+            _activity_logger_instance.stop()
+        except Exception:
+            logger.exception("Error stopping activity logger")
+        _activity_logger_instance = None
+
+
+# ---------------------------------------------------------------------------
 # Admin gateway (in-process uvicorn, daemon thread)
 # ---------------------------------------------------------------------------
 
@@ -1083,6 +1140,9 @@ def main() -> None:
     # 10. Start coordinator (activity monitor, classification, etc.) in daemon thread
     coordinator_thread = start_coordinator()
 
+    # 10a. Start activity logger (writes usage.db for admin portal + email reports)
+    start_activity_logger()
+
     # 10b. Start email report scheduler (hourly/daily reports) in daemon thread
     email_thread = start_email_scheduler()
 
@@ -1094,6 +1154,7 @@ def main() -> None:
     finally:
         logger.info("Shutting down…")
         stop_email_scheduler()
+        stop_activity_logger()
         if admin_gw_shutdown:
             admin_gw_shutdown()
         if tab_server_runner:
