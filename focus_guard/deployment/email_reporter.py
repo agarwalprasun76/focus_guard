@@ -5,15 +5,17 @@ This module handles generating and sending email reports with usage summaries.
 Reuses SQLiteUsageDatabase from the core activity module for data access.
 """
 
+import json
+import logging
 import smtplib
 import ssl
 import sqlite3
-import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
 
 from focus_guard.deployment.config import DeploymentConfig, EmailConfig
 from focus_guard.core.activity.enhanced_logger import SQLiteUsageDatabase
@@ -380,6 +382,10 @@ class EmailReporter:
                             (start_ts, end_ts, self.config.reporting.include_top_domains),
                         )
                         stats['top_domains'] = [dict(row) for row in cursor.fetchall()]
+                        try:
+                            stats['override_count'] = self._get_override_count_for_period(start_time, end_time)
+                        except Exception:
+                            pass
                         return stats
 
                 # ── Tier 2: usage_sessions ───────────────────────────
@@ -506,10 +512,46 @@ class EmailReporter:
                 except Exception:
                     pass
 
+                # ── Override count from override log file (same source as tab server) ──
+                try:
+                    stats['override_count'] = self._get_override_count_for_period(start_time, end_time)
+                except Exception:
+                    pass
+
         except Exception as e:
             logger.error(f"Error getting period stats: {e}")
 
         return stats
+
+    def _get_override_count_for_period(self, start_time: datetime, end_time: datetime) -> int:
+        """Count override grants in the period by reading override_log.json if present."""
+        start_ts = start_time.timestamp()
+        end_ts = end_time.timestamp()
+        for base in [Path.home() / ".focus_guard", Path(self.config.storage.get_data_directory())]:
+            log_file = base / "override_log.json"
+            if not log_file.exists():
+                continue
+            try:
+                with open(log_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                log = data.get("log") or []
+                count = 0
+                for entry in log:
+                    if entry.get("event_type") != "granted":
+                        continue
+                    ts = entry.get("timestamp")
+                    if ts is None:
+                        continue
+                    try:
+                        t = float(ts)
+                    except (TypeError, ValueError):
+                        continue
+                    if start_ts <= t <= end_ts:
+                        count += 1
+                return count
+            except Exception as e:
+                logger.debug("Could not read override log %s: %s", log_file, e)
+        return 0
     
     def _get_daily_stats(self, db_path: Path, date: str) -> Dict[str, Any]:
         """
@@ -551,6 +593,20 @@ class EmailReporter:
         base = "http://127.0.0.1:58393"
         return (f"{base}/admin", f"{base}/admin/status")
 
+    def _fetch_focus_score_from_tab_server(self) -> Optional[Dict[str, Any]]:
+        """If tab server is reachable, return popup context with focus_score and blocks_today."""
+        try:
+            from urllib.request import urlopen
+            port = getattr(self.config, "tab_server_port", 58392)
+            url = f"http://127.0.0.1:{port}/api/popup_context"
+            req = urlopen(url, timeout=2)
+            data = json.loads(req.read().decode("utf-8"))
+            if isinstance(data, dict) and ("focus_score" in data or "blocks_today" in data):
+                return data
+        except Exception:
+            pass
+        return None
+
     def _generate_hourly_report_html(self, stats: Dict[str, Any], 
                                       start_time: datetime, end_time: datetime) -> str:
         """Generate HTML content for hourly report."""
@@ -588,6 +644,16 @@ class EmailReporter:
             <div class="summary">
                 <p>Active Time: <span class="metric">{active_mins:.1f} minutes</span></p>
                 <p>Sessions: <span class="metric">{stats['sessions_count']}</span></p>
+        """
+        popup_ctx = self._fetch_focus_score_from_tab_server()
+        if popup_ctx is not None:
+            score = popup_ctx.get("focus_score")
+            blocks = popup_ctx.get("blocks_today", 0)
+            if score is not None:
+                html += f"<p>Focus Score: <span class=\"metric\">{int(score)}/100</span></p>"
+            if blocks is not None and int(blocks) > 0:
+                html += f"<p>Sites blocked today: <span class=\"metric\">{int(blocks)}</span></p>"
+        html += """
             </div>
         """
         
@@ -857,9 +923,15 @@ class EmailReporter:
             True if sent successfully
         """
         try:
+            recipients = self.email_config.recipients
+            if isinstance(recipients, str):
+                recipients = [r.strip() for r in recipients.split(",") if r.strip()]
+            if not isinstance(recipients, list) or not recipients:
+                logger.warning("No email recipients configured; skipping send")
+                return False
             msg = MIMEMultipart('alternative')
             msg['From'] = f"{self.email_config.sender_name} <{self.email_config.sender_email}>"
-            msg['To'] = ", ".join(self.email_config.recipients)
+            msg['To'] = ", ".join(recipients)
             msg['Subject'] = subject
             
             # Create plain text version

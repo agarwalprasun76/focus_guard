@@ -16,16 +16,16 @@ todos:
     status: completed
   - id: phase1-email-rich
     content: "Phase 1.3: Richer email content -- top apps, domains, blocked sites, overrides"
-    status: pending
+    status: completed
   - id: phase1-email-multi
     content: "Phase 1.4: Verify/fix multiple email recipients support"
-    status: pending
+    status: completed
   - id: phase2-bugs
     content: "Phase 2.1-2.2: Fix BUG-012 (devices page) + BUG-015 (friction readability)"
     status: completed
   - id: phase3-blocked
     content: "Phase 3.1: Verify/fix budget context on blocked page (W-60 / BUG-018)"
-    status: pending
+    status: completed
   - id: phase3-extension
     content: "Phase 3.2: Extension polling optimization — event-driven updates (W-42)"
     status: pending

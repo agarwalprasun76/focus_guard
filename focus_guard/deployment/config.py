@@ -261,7 +261,15 @@ class DeploymentConfig:
                 data = json.load(f)
             
             # Reconstruct nested dataclasses
-            email = EmailConfig(**data.get('email', {}))
+            email_data = data.get('email', {})
+            # Normalize recipients to list (support comma-separated string from UI/JSON)
+            recipients = email_data.get('recipients', [])
+            if isinstance(recipients, str):
+                recipients = [r.strip() for r in recipients.split(',') if r.strip()]
+            elif not isinstance(recipients, list):
+                recipients = []
+            email_data['recipients'] = recipients
+            email = EmailConfig(**email_data)
             
             # Handle nested ScheduleConfig in ReportingConfig
             reporting_data = data.get('reporting', {})

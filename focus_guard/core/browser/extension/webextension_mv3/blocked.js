@@ -91,7 +91,8 @@ async function loadUsageStats() {
     try {
         // Get master distraction budget first
         const masterResponse = await fetch(`${SERVER_URL}/api/distraction/budget`);
-        const masterData = await masterResponse.json();
+        let masterData = await masterResponse.json().catch(() => ({}));
+        if (!masterResponse.ok) masterData = { ...masterData, error: true };
         updateMasterBudgetDisplay(masterData);
         
         // Get domain usage stats
@@ -109,8 +110,18 @@ async function loadUsageStats() {
         updateStatsDisplay(usageData, ruleData, checkData, masterData);
     } catch (err) {
         console.log('Could not load usage stats:', err);
-        document.getElementById('statsPanel').style.display = 'none';
-        document.getElementById('masterBudgetPanel').style.display = 'none';
+        const statsPanel = document.getElementById('statsPanel');
+        const masterPanel = document.getElementById('masterBudgetPanel');
+        if (statsPanel) statsPanel.style.display = 'none';
+        if (masterPanel) {
+            masterPanel.style.display = 'block';
+            const hdr = masterPanel.querySelector('.stats-header');
+            if (hdr) hdr.textContent = 'Budget status unavailable';
+            const remainingEl = document.getElementById('masterRemaining');
+            if (remainingEl) remainingEl.textContent = '--';
+            const progressLabel = document.getElementById('masterProgressLabel');
+            if (progressLabel) progressLabel.textContent = 'FocusGuard may not be running. Check the system tray.';
+        }
     }
 }
 
@@ -124,6 +135,19 @@ function updateMasterBudgetDisplay(data) {
     const progressLabel = document.getElementById('masterProgressLabel');
     const sitesContainer = document.getElementById('sitesListContainer');
     const sitesList = document.getElementById('sitesList');
+    const panel = document.getElementById('masterBudgetPanel');
+
+    if (!data || data.error) {
+        if (panel) {
+            panel.querySelector('.stats-header').textContent = 'Budget status unavailable';
+            remainingEl.textContent = '--';
+            usedEl.textContent = '--';
+            limitEl.textContent = '--';
+            sitesEl.textContent = '--';
+            progressLabel.textContent = 'FocusGuard may not be running. Check the system tray.';
+        }
+        return;
+    }
     
     // Update values
     remainingEl.textContent = data.remaining_formatted || '--';

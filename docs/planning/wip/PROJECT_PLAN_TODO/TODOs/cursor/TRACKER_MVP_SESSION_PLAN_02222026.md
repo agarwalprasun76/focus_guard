@@ -13,10 +13,10 @@
 | phase0-build | Phase 0.2: Build admin UI + rebuild exe (PyInstaller) | ✅ Completed | (plan) |
 | phase0-verify | Phase 0.3: Runtime verification — domains, activity tab, dashboard hero, enforcement toggle | 🔄 In progress | — |
 | phase1-email-link | Phase 1.1–1.2: Admin console link + health check link in email reports | ✅ Completed | 2026-02-22 |
-| phase1-email-rich | Phase 1.3: Richer email content — top apps, domains, blocked sites, overrides | ⬜ Pending | — |
-| phase1-email-multi | Phase 1.4: Verify/fix multiple email recipients support | ⬜ Pending | — |
+| phase1-email-rich | Phase 1.3: Richer email content — top apps, domains, blocked sites, overrides | ✅ Completed | 2026-02-22 |
+| phase1-email-multi | Phase 1.4: Verify/fix multiple email recipients support | ✅ Completed | 2026-02-22 |
 | phase2-bugs | Phase 2.1–2.2: Fix BUG-012 (devices page) + BUG-015 (friction readability) | ✅ Completed | 2026-02-22 |
-| phase3-blocked | Phase 3.1: Verify/fix budget context on blocked page (W-60 / BUG-018) | ⬜ Pending | — |
+| phase3-blocked | Phase 3.1: Verify/fix budget context on blocked page (W-60 / BUG-018) | ✅ Completed | 2026-02-22 |
 | phase3-extension | Phase 3.2: Extension polling optimization (W-42) | ⬜ Pending | — |
 | phase3-feedback-ui | Phase 3.3: Classification feedback from blocked page (W-40) | ⬜ Pending | — |
 | phase4-feedback | Phase 4.1 Layer 1: Classification feedback endpoint + blocked page button | ⬜ Pending | — |
