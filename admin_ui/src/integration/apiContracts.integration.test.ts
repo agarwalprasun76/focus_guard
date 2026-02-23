@@ -44,7 +44,7 @@ describe("API contracts via MSW", () => {
   });
 
   it("maps structured service error from dashboard contract", async () => {
-    await expect(dashboardApi.getDashboard("prasun-pc")).rejects.toMatchObject({
+    await expect(dashboardApi.getDashboard({ deviceId: "prasun-pc" })).rejects.toMatchObject({
       code: "DEVICE_OFFLINE",
       status: 409,
     } satisfies Partial<ApiClientError>);
@@ -63,7 +63,7 @@ describe("API contracts via MSW", () => {
     );
 
     setAuthToken("stale-token");
-    await expect(dashboardApi.getDashboard("prasun-pc")).rejects.toMatchObject({
+    await expect(dashboardApi.getDashboard({ deviceId: "prasun-pc" })).rejects.toMatchObject({
       code: "UNAUTHORIZED",
       status: 401,
     } satisfies Partial<ApiClientError>);
@@ -88,7 +88,7 @@ describe("API contracts via MSW", () => {
       })
     );
 
-    await dashboardApi.getDashboard("prasun-pc");
+    await dashboardApi.getDashboard({ deviceId: "prasun-pc" });
     expect(seenRequestId).toBeTruthy();
     expect(typeof seenRequestId).toBe("string");
     expect((seenRequestId ?? "").length).toBeGreaterThan(8);
@@ -110,7 +110,7 @@ describe("API contracts via MSW", () => {
       )
     );
 
-    await expect(dashboardApi.getDashboard("prasun-pc")).rejects.toMatchObject({
+    await expect(dashboardApi.getDashboard({ deviceId: "prasun-pc" })).rejects.toMatchObject({
       code: "UPSTREAM_ERROR",
       status: 502,
       requestId: "req-msw-123",

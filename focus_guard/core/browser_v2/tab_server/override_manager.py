@@ -884,12 +884,22 @@ class OverrideManager:
             
             return [o.to_dict() for o in self._active_overrides.values()]
     
-    def get_log(self, limit: int = 100, domain: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get recent override log entries."""
+    def get_log(
+        self,
+        limit: int = 100,
+        domain: Optional[str] = None,
+        since_ts: Optional[float] = None,
+        until_ts: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get recent override log entries, optionally filtered by timestamp range."""
         with self._lock:
             entries = self._override_log
             if domain:
                 entries = [e for e in entries if e.domain == domain]
+            if since_ts is not None:
+                entries = [e for e in entries if e.timestamp >= since_ts]
+            if until_ts is not None:
+                entries = [e for e in entries if e.timestamp <= until_ts]
             return [e.to_dict() for e in entries[-limit:]]
     
     def get_daily_stats(self) -> Dict[str, Any]:

@@ -98,7 +98,18 @@ export type DashboardResponse = {
   top_friction: DashboardTopFrictionItem[];
 };
 
-export function getDashboard(deviceId?: string): Promise<DashboardResponse> {
-  const query = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
+export type DashboardDateRange = {
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+};
+
+export function getDashboard(
+  options?: { deviceId?: string; startDate?: string; endDate?: string }
+): Promise<DashboardResponse> {
+  const params = new URLSearchParams();
+  if (options?.deviceId) params.set("device_id", options.deviceId);
+  if (options?.startDate) params.set("start_date", options.startDate);
+  if (options?.endDate) params.set("end_date", options.endDate);
+  const query = params.toString() ? `?${params.toString()}` : "";
   return requestJson<DashboardResponse>(`/dashboard${query}`);
 }

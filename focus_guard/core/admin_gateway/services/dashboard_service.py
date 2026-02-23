@@ -12,6 +12,33 @@ from focus_guard.core.admin_gateway.services.tab_server_client import (
 
 _DASHBOARD_THREAD_POOL_SIZE = 6
 
+# Domains to exclude from Problem Sites / Recent Overrides (BUG-015: filter synthetic)
+_SYNTHETIC_DOMAIN_PREFIXES = (
+    "localhost",
+    "127.0.0.1",
+    "example.com",
+    "example.org",
+    "example.net",
+    "test.",
+    ".local",
+)
+
+
+def _is_synthetic_domain(domain: str) -> bool:
+    """Return True if domain looks like a test/synthetic entry and should be hidden from parents."""
+    if not domain or not isinstance(domain, str):
+        return True
+    d = domain.strip().lower()
+    if not d:
+        return True
+    for prefix in _SYNTHETIC_DOMAIN_PREFIXES:
+        if prefix.startswith("."):
+            if d.endswith(prefix) or prefix in d:
+                return True
+        elif d == prefix or d.startswith(prefix + "."):
+            return True
+    return False
+
 
 class DashboardService:
     """Aggregates dashboard data from tab-server endpoints."""
@@ -19,21 +46,35 @@ class DashboardService:
     def __init__(self, tab_server_client: TabServerClient) -> None:
         self._tab_server_client = tab_server_client
 
-    def get_dashboard(self, device_id: str | None = None) -> dict[str, Any]:
+    def get_dashboard(
+        self,
+        device_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, Any]:
         """Aggregate dashboard payload from tab-server endpoints.
 
         All upstream calls run in parallel via a thread pool to avoid the
         cumulative latency of 12 sequential HTTP round-trips.
+
+        start_date / end_date: optional YYYY-MM-DD; when set, override log
+        and friction data are filtered to that range. Budget/stats remain today.
         """
 
         target_device = device_id or "default-device"
+
+        override_log_params: dict[str, Any] = {"limit": 25}
+        if start_date:
+            override_log_params["since"] = start_date
+        if end_date:
+            override_log_params["until"] = end_date
 
         requests: dict[str, tuple[str, dict[str, Any] | None]] = {
             "health": ("/api/health", None),
             "budget": ("/api/distraction/budget", None),
             "distraction_sites": ("/api/distraction/sites", None),
             "override_stats": ("/api/override/stats", None),
-            "override_log_resp": ("/api/override/log", {"limit": 25}),
+            "override_log_resp": ("/api/override/log", override_log_params),
             "enforcement": ("/api/enforcement_mode", None),
             "blocked_sites_resp": ("/api/blocked/sites", None),
             "saved_links_stats": ("/api/saved_links/stats", None),
@@ -148,14 +189,28 @@ class DashboardService:
     def _build_recent_overrides(self, override_log: list[dict[str, Any]]) -> list[dict[str, Any]]:
         recent: list[dict[str, Any]] = []
         for entry in reversed(override_log[-10:]):
+            domain = str(entry.get("domain") or "").strip()
+            if _is_synthetic_domain(domain):
+                continue
             details = entry.get("details") or {}
+            if not isinstance(details, dict):
+                details = {}
+            remaining = details.get("remaining_seconds")
+            if remaining is None:
+                remaining = 0
+            try:
+                remaining = int(remaining)
+            except (TypeError, ValueError):
+                remaining = 0
+            # Human-friendly status (BUG-015): Active vs Expired, not raw action
+            status = "Active" if remaining > 0 else "Expired"
             recent.append(
                 {
-                    "id": entry.get("override_id") or entry.get("id") or "",
-                    "domain": entry.get("domain") or "",
-                    "status": entry.get("action") or "unknown",
+                    "id": str(entry.get("override_id") or entry.get("id") or ""),
+                    "domain": domain,
+                    "status": status,
                     "expires_at": details.get("expires_at"),
-                    "remaining_seconds": details.get("remaining_seconds", 0),
+                    "remaining_seconds": remaining,
                     "timestamp": entry.get("timestamp"),
                 }
             )
@@ -203,14 +258,16 @@ class DashboardService:
         override_counts: dict[str, int] = {}
         for entry in override_log:
             domain = str(entry.get("domain") or "").strip().lower()
-            if not domain:
+            if not domain or _is_synthetic_domain(domain):
                 continue
             override_counts[domain] = override_counts.get(domain, 0) + 1
 
         time_by_domain: dict[str, float] = {}
         for site in sites:
+            if not isinstance(site, dict):
+                continue
             domain = str(site.get("domain") or "").strip().lower()
-            if not domain:
+            if not domain or _is_synthetic_domain(domain):
                 continue
             time_by_domain[domain] = float(site.get("active_seconds", 0) or 0)
 

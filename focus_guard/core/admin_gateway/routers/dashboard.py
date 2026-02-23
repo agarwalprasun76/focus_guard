@@ -13,9 +13,15 @@ router = APIRouter(prefix="/admin/api/v1", tags=["dashboard"])
 @router.get("/dashboard")
 def get_dashboard(
     device_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     tab_server_client=Depends(get_tab_server_client),
 ) -> dict:
-    """Placeholder dashboard aggregation endpoint; implemented in P2-04."""
+    """Dashboard aggregation. Optional start_date/end_date (YYYY-MM-DD) filter override/friction data."""
 
     service = DashboardService(tab_server_client)
-    return service.get_dashboard(device_id=device_id)
+    return service.get_dashboard(
+        device_id=device_id,
+        start_date=start_date,
+        end_date=end_date,
+    )

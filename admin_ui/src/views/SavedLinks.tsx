@@ -23,7 +23,7 @@ function toSafeHref(rawUrl: string): string {
 export function SavedLinks() {
   const dashboardQuery = useQuery({
     queryKey: ["saved-links", "default-device"],
-    queryFn: () => dashboardApi.getDashboard("default-device"),
+    queryFn: () => dashboardApi.getDashboard({ deviceId: "default-device" }),
     refetchInterval: 20000,
     retry: 2,
     retryDelay: (attempt) => Math.min(3000, 500 * 2 ** attempt),

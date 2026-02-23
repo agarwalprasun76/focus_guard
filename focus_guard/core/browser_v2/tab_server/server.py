@@ -395,10 +395,24 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({"overrides": overrides}).encode("utf-8"))
 
     def _handle_get_override_log(self, params: Dict[str, str]) -> None:
-        """Get override log entries."""
+        """Get override log entries. Optional since/until (YYYY-MM-DD) filter by date."""
         limit = int(params.get("limit", "100"))
         domain = params.get("domain")
-        log = self.context.get_override_log(limit, domain)
+        since_ts: Optional[float] = None
+        until_ts: Optional[float] = None
+        try:
+            from datetime import datetime
+            since_str = params.get("since")
+            if since_str:
+                dt = datetime.strptime(since_str, "%Y-%m-%d")
+                since_ts = dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+            until_str = params.get("until")
+            if until_str:
+                dt = datetime.strptime(until_str, "%Y-%m-%d")
+                until_ts = dt.replace(hour=23, minute=59, second=59, microsecond=999999).timestamp()
+        except (ValueError, TypeError):
+            pass
+        log = self.context.get_override_log(limit, domain, since_ts=since_ts, until_ts=until_ts)
         self._set_headers(HTTPStatus.OK)
         self.wfile.write(json.dumps({"log": log}).encode("utf-8"))
 
@@ -1601,8 +1615,7 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                 daily_breakdown: list[dict] = []
 
                 if has_samples:
-                    ts_start = f"{start_date} 00:00:00"
-                    ts_end = f"{end_date} 23:59:59"
+                    next_day = (_date.fromisoformat(end_date) + timedelta(days=1)).isoformat()
                     cursor.execute(
                         """
                         SELECT app_name,
@@ -1611,12 +1624,12 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                                MAX(domain)         AS last_domain,
                                MAX(window_title)   AS last_title
                         FROM activity_samples
-                        WHERE timestamp >= ? AND timestamp <= ?
+                        WHERE timestamp >= ? AND timestamp < ?
                         GROUP BY app_name
                         ORDER BY total_seconds DESC
                         LIMIT ?
                         """,
-                        (ts_start, ts_end, limit),
+                        (start_date, next_day, limit),
                     )
                     for row in cursor.fetchall():
                         secs = row["total_seconds"] or 0
@@ -1639,11 +1652,11 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                                    COUNT(DISTINCT app_name) AS app_count,
                                    COUNT(*) AS sample_count
                             FROM activity_samples
-                            WHERE timestamp >= ? AND timestamp <= ?
+                            WHERE timestamp >= ? AND timestamp < ?
                             GROUP BY DATE(timestamp)
                             ORDER BY day
                             """,
-                            (ts_start, ts_end),
+                            (start_date, next_day),
                         )
                         for row in cursor.fetchall():
                             day_str = row["day"]
@@ -1660,8 +1673,7 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                                 "sample_count": row["sample_count"],
                             })
                 else:
-                    ts_start = f"{start_date} 00:00:00"
-                    ts_end = f"{end_date} 23:59:59"
+                    next_day = (_date.fromisoformat(end_date) + timedelta(days=1)).isoformat()
                     cursor.execute(
                         """
                         SELECT app_name,
@@ -1671,12 +1683,12 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                                MAX(window_title)    AS last_title,
                                MAX(is_browser)      AS is_browser
                         FROM usage_sessions
-                        WHERE start_time >= ? AND start_time <= ?
+                        WHERE start_time >= ? AND start_time < ?
                         GROUP BY app_name
                         ORDER BY total_seconds DESC
                         LIMIT ?
                         """,
-                        (ts_start, ts_end, limit),
+                        (start_date, next_day, limit),
                     )
                     for row in cursor.fetchall():
                         secs = row["total_seconds"] or 0
@@ -1699,11 +1711,11 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                                    COUNT(DISTINCT app_name) AS app_count,
                                    COUNT(*) AS session_count
                             FROM usage_sessions
-                            WHERE start_time >= ? AND start_time <= ?
+                            WHERE start_time >= ? AND start_time < ?
                             GROUP BY DATE(start_time)
                             ORDER BY day
                             """,
-                            (ts_start, ts_end),
+                            (start_date, next_day),
                         )
                         for row in cursor.fetchall():
                             day_str = row["day"]
@@ -2337,10 +2349,16 @@ class TabServerContext:
         from .override_manager import get_override_manager
         return get_override_manager().get_active_overrides()
 
-    def get_override_log(self, limit: int = 100, domain: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get override log entries."""
+    def get_override_log(
+        self,
+        limit: int = 100,
+        domain: Optional[str] = None,
+        since_ts: Optional[float] = None,
+        until_ts: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get override log entries, optionally filtered by timestamp range."""
         from .override_manager import get_override_manager
-        return get_override_manager().get_log(limit, domain)
+        return get_override_manager().get_log(limit, domain, since_ts=since_ts, until_ts=until_ts)
 
     def get_override_stats(self) -> Dict[str, Any]:
         """Get override statistics."""

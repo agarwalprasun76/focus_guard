@@ -28,31 +28,34 @@ class DevicesService:
         self._tab_server_client = tab_server_client
 
     def list_devices(self) -> dict[str, Any]:
-        """Return single-device status payload (list-ready)."""
+        """Return single-device status payload (list-ready).
 
+        Defensive against malformed tab server responses (BUG-012): never assume
+        health/status/enforcement are dicts; coerce types so the frontend always
+        receives a valid devices list.
+        """
         health: dict[str, Any] = {}
         status: dict[str, Any] = {}
         enforcement: dict[str, Any] = {}
 
         try:
-            health = self._tab_server_client.get_json("/api/health")
+            raw = self._tab_server_client.get_json("/api/health")
+            health = raw if isinstance(raw, dict) else {}
         except (TabServerUnavailableError, TabServerRequestError) as exc:
             raise DevicesServiceError("DEVICE_OFFLINE", str(exc), 409) from exc
         except Exception as exc:
             raise DevicesServiceError("UPSTREAM_ERROR", str(exc), 502) from exc
 
         try:
-            status = self._tab_server_client.get_json("/api/status")
-        except (TabServerUnavailableError, TabServerRequestError):
-            pass
-        except Exception:
+            raw = self._tab_server_client.get_json("/api/status")
+            status = raw if isinstance(raw, dict) else {}
+        except (TabServerUnavailableError, TabServerRequestError, Exception):
             pass
 
         try:
-            enforcement = self._tab_server_client.get_json("/api/enforcement_mode")
-        except (TabServerUnavailableError, TabServerRequestError):
-            pass
-        except Exception:
+            raw = self._tab_server_client.get_json("/api/enforcement_mode")
+            enforcement = raw if isinstance(raw, dict) else {}
+        except (TabServerUnavailableError, TabServerRequestError, Exception):
             pass
 
         connected_browsers = 0
@@ -62,18 +65,26 @@ class DevicesService:
                 connected_browsers = int(cb)
             else:
                 browsers = status.get("browsers") if isinstance(status.get("browsers"), list) else []
-                connected_browsers = len([b for b in browsers if b.get("connected")])
+                connected_browsers = len([b for b in browsers if isinstance(b, dict) and b.get("connected")])
         except (TypeError, ValueError):
             pass
 
-        machine_name = str(health.get("machine_name") or "default-device")
+        machine_name = str(health.get("machine_name") or "default-device").strip() or "default-device"
+        mode = enforcement.get("enforcement_mode")
+        if not isinstance(mode, str) or not mode.strip():
+            mode = "enforcing"
+        else:
+            mode = str(mode).strip().lower()
+        if mode not in ("tracking", "advisory", "enforcing"):
+            mode = "enforcing"
+
         return {
             "devices": [
                 {
                     "id": machine_name,
                     "name": machine_name,
                     "status": "online",
-                    "enforcement_mode": enforcement.get("enforcement_mode", "enforcing"),
+                    "enforcement_mode": mode,
                     "last_seen": None,
                     "browser_status": {
                         "connected_browsers": connected_browsers,
