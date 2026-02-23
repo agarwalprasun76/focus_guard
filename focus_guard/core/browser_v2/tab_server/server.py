@@ -2188,20 +2188,7 @@ class TabServerContext:
         # --- Determine enforcement mode ---
         enforcement_mode = self._get_enforcement_mode()
 
-        # --- Override check (skip in tracking mode — no overrides needed) ---
-        if enforcement_mode == "enforcing":
-            try:
-                override_status = self.check_override(domain)
-                if override_status.get("has_override"):
-                    remaining = override_status.get("remaining_seconds", 0)
-                    return BlockingDecision(
-                        should_block=False,
-                        reason=f"Override active ({int(remaining)}s remaining)",
-                    )
-            except Exception as exc:
-                logger.debug("Override check failed (continuing): %s", exc)
-
-        # --- Normal blocking check (always runs for classification/logging) ---
+        # --- Blocking check (pipeline includes active_override as first step; single decision trail) ---
         decision = BlockingDecision(should_block=False)
         if self._blocking_checker:
             try:

@@ -8,7 +8,6 @@ are read from DomainConfigManager (domain_config.json). The hardcoded
 values below are kept as **fallback defaults** only.
 """
 
-import asyncio
 import logging
 from typing import Dict, Any, Optional, Set
 
@@ -180,6 +179,16 @@ class ClassificationBlocker:
             return "rule"
         return "hybrid"
     
+    def _get_pipeline(self):
+        """Build or return the blocking pipeline with all steps (lazy, once per blocker)."""
+        if getattr(self, "_pipeline", None) is None:
+            from .blocking_pipeline import BlockingPipeline
+            from .blocking_steps import STEP_ORDER
+            self._pipeline = BlockingPipeline()
+            for name, step_fn in STEP_ORDER:
+                self._pipeline.add_step(name, step_fn)
+        return self._pipeline
+
     def check_blocking(
         self, 
         url: str, 
@@ -188,6 +197,11 @@ class ClassificationBlocker:
         tab_id: Optional[int] = None,
     ) -> BlockingDecision:
         """Check if a URL should be blocked based on classification.
+        
+        Runs the modular blocking pipeline (override → always-allowed → search
+        context → immediate domain block → schedule → classification → fallback
+        domain rule → policy). First terminal step wins; full step_trace is
+        available for auditing. LLM classifications are persisted for auditability.
         
         This is the callback for BlockingManager.external_checker.
         
@@ -200,266 +214,19 @@ class ClassificationBlocker:
         Returns:
             BlockingDecision with the result, including classification and budget info.
         """
-        # Check if domain is in always-allowed list (core productivity tools)
-        # Use subdomain-aware matching (e.g. stanfordohs.pronto.io matches pronto.io)
-        from focus_guard.core.domain.domain_config_manager import find_matching_domain
-        if find_matching_domain(domain, ALWAYS_ALLOWED_DOMAINS):
-            logger.debug("Domain %s is in always-allowed list, skipping classification", domain)
-            return BlockingDecision(
-                should_block=False,
-                classification={
-                    "category": "PRODUCTIVITY",
-                    "usefulness": "NEUTRAL",
-                    "confidence": 1.0,
-                    "reason": "Core productivity tool (always allowed)",
-                    "classifier_used": "whitelist",
-                    "decision_source": "override",
-                    "block_basis": "explicit_allow_domain",
-                    "is_distracting": False,
-                },
-                budget_status=self._get_budget_status(domain, "PRODUCTIVITY", "NEUTRAL"),
-            )
-        
-        search_check: Dict[str, Any] = {}
-        # First, check search context for file-sharing sites
-        # This catches entertainment content on Google Drive, etc.
-        try:
-            from .search_context_tracker import get_search_context_tracker
-            tracker = get_search_context_tracker()
-            search_check = tracker.check_should_block_file_sharing(
-                url=url,
-                domain=domain,
-                title=title,
-                tab_id=tab_id,
-            )
-            
-            if search_check.get("should_block"):
-                reason = search_check.get("reason", "Entertainment content on file-sharing site")
-                logger.info("Blocking file-sharing URL due to search context: %s", reason)
-                # Get budget status for entertainment content
-                budget_status = self._get_budget_status(domain, "ENTERTAINMENT", "DISTRACTION")
-                return BlockingDecision(
-                    should_block=True,
-                    reason=reason,
-                    rule=BlockingRule(
-                        domain=domain,
-                        reason=reason,
-                        category="ENTERTAINMENT",
-                    ),
-                    classification={
-                        "category": "ENTERTAINMENT",
-                        "usefulness": "DISTRACTION",
-                        "confidence": 0.9,
-                        "reason": reason,
-                        "classifier_used": "search_context",
-                        "decision_source": "override",
-                        "block_basis": "search_context_file_sharing",
-                    },
-                    budget_status=budget_status,
-                )
-        except Exception as e:
-            logger.debug("Search context check failed (continuing): %s", e)
-        
-        # IMMEDIATE BLOCK: Adult/porn and pure entertainment sites - no classification needed
-        # These should be blocked instantly without waiting for classification
-        # Pure entertainment = sites that have NO educational content (unlike YouTube)
-        ALWAYS_BLOCK_CATEGORIES = {"ADULT", "ENTERTAINMENT"}
-        # Exception: sites with content-aware classifiers that CAN have educational content
-        # Spotify included because it has educational podcasts
-        CONTENT_AWARE_DOMAINS = {"youtube.com", "youtu.be", "reddit.com", "twitter.com", "x.com", "spotify.com"}
-        domain_lower = domain.lower()
-        has_content_aware_classifier = any(cad in domain_lower for cad in CONTENT_AWARE_DOMAINS)
-        
-        try:
-            mgr = _get_config_manager()
-            if mgr:
-                known_cat = mgr.get_category_for_domain(domain)
-                cat_upper = known_cat.upper() if known_cat else None
-                
-                # Immediate block for adult content (always) or entertainment (if no content-aware classifier)
-                # Adult: always block immediately
-                # Entertainment: block immediately UNLESS it has a content-aware classifier (YouTube, Reddit, etc.)
-                should_immediate_block = False
-                if cat_upper == "ADULT":
-                    should_immediate_block = True
-                    block_reason = "Adult content is blocked"
-                elif cat_upper == "ENTERTAINMENT" and not has_content_aware_classifier:
-                    should_immediate_block = True
-                    block_reason = f"Entertainment site {domain} is blocked"
-                
-                if should_immediate_block:
-                    budget_status = self._get_budget_status(domain, cat_upper, "DISTRACTION")
-                    logger.info("Immediate %s block: %s", cat_upper.lower(), domain)
-                    return BlockingDecision(
-                        should_block=True,
-                        reason=block_reason,
-                        rule=BlockingRule(domain=domain, reason=block_reason, category=cat_upper),
-                        classification={
-                            "category": cat_upper,
-                            "usefulness": "DISTRACTION",
-                            "confidence": 1.0,
-                            "reason": block_reason,
-                            "classifier_used": f"{cat_upper.lower()}_domain_block",
-                            "decision_source": "override",
-                            "block_basis": "explicit_domain_category",
-                            "is_distracting": True,
-                        },
-                        budget_status=budget_status,
-                    )
-        except Exception as e:
-            logger.debug("Adult content check failed: %s", e)
-        
-        # INTELLIGENT CLASSIFICATION FIRST
-        # Always try content-aware classification before falling back to domain rules.
-        # This ensures educational YouTube videos, productive Reddit threads, etc. are allowed.
-        classification_service = self._get_classification_service()
-        if classification_service is None:
-            return BlockingDecision(should_block=False)
-        
-        try:
-            # Run async classification in sync context
-            # Include title in context for better classification
-            context = {"url": url}
-            if title:
-                context["title"] = title
-            if tab_id is not None:
-                context["tab_id"] = tab_id
-            if search_check.get("search_context"):
-                context["search_context"] = search_check.get("search_context")
-                context["search_matched_keywords"] = search_check.get("matched_keywords", [])
-            
-            result = asyncio.run(
-                classification_service.classify_async(domain, url, context)
-            )
-            
-            if result is None:
-                # Classification failed - fall back to domain-level rules
-                return self._fallback_to_domain_rules(domain, url, title)
+        from .blocking_pipeline import BlockingRequest, BlockingContext
 
-            llm_escalation_attempted = False
-            llm_escalation_applied = False
-            initial_decision_source = self._decision_source_from_classifier(result.classifier_used)
-            if (
-                self.escalate_uncertain_to_llm
-                and result.confidence < self.low_confidence_threshold
-                and initial_decision_source != "llm"
-            ):
-                llm_escalation_attempted = True
-                llm_context = dict(context)
-                llm_context["force_llm"] = True
-                llm_context["rule_confidence_threshold"] = 1.1
-                llm_result = asyncio.run(
-                    classification_service.classify_async(domain, url, llm_context)
-                )
-                if llm_result is not None and self._decision_source_from_classifier(llm_result.classifier_used) == "llm":
-                    result = llm_result
-                    llm_escalation_applied = True
-            
-            # If classification returned UNKNOWN with low confidence, fall back to domain rules
-            # This ensures we don't let obviously distracting sites through just because
-            # the classifier couldn't determine the content type
-            if result.category == "UNKNOWN" and result.confidence < 0.5:
-                logger.info("Low-confidence UNKNOWN classification for %s, checking domain rules", domain)
-                fallback = self._fallback_to_domain_rules(domain, url, title)
-                if fallback.should_block:
-                    return fallback
-                # If domain rules don't block, continue with the UNKNOWN classification (allow)
-            
-            # Build classification dict for response
-            classification_dict = {
-                "category": result.category,
-                "usefulness": result.usefulness.value if hasattr(result.usefulness, 'value') else str(result.usefulness),
-                "confidence": result.confidence,
-                "reason": result.reason,
-                "classifier_used": result.classifier_used,
-                "decision_source": self._decision_source_from_classifier(result.classifier_used),
-                "content_type": getattr(result, 'content_type', 'unknown'),
-                "is_distracting": result.is_distracting,
-                "llm_escalation_attempted": llm_escalation_attempted,
-                "llm_escalation_applied": llm_escalation_applied,
-            }
-            
-            # Get budget status based on classification
-            usefulness_str = classification_dict["usefulness"].upper()
-            budget_status = self._get_budget_status(domain, result.category, usefulness_str)
-            
-            # Determine if should block
-            should_block = False
-            block_reason = ""
-            block_basis = "none"
-            
-            # Check if category is in blocked list
-            if result.category in self.blocked_categories:
-                should_block = True
-                block_reason = f"Category {result.category} is blocked"
-                block_basis = "category_rule"
-            
-            # Check if marked as distraction
-            if self.block_distracting and result.is_distracting:
-                should_block = True
-                block_reason = f"Content classified as distracting ({result.category})"
-                block_basis = "distracting_content"
-            
-            # Never block educational/productivity content
-            if result.category in ALWAYS_ALLOWED_CATEGORIES:
-                should_block = False
-                block_reason = ""
-                block_basis = "always_allowed_category"
+        request = BlockingRequest(url=url, domain=domain, title=title, tab_id=tab_id)
 
-            if budget_status and budget_status.get("budget_exhausted"):
-                classification_dict["budget_exhausted"] = True
+        def context_initializer(req: BlockingRequest) -> BlockingContext:
+            ctx = BlockingContext()
+            ctx.set("_blocker", self)
+            return ctx
 
-            if result.confidence < self.low_confidence_threshold:
-                classification_dict["is_uncertain"] = True
-                classification_dict["uncertain_policy"] = self.uncertain_policy
-                if self.uncertain_policy == "allow":
-                    should_block = False
-                    block_reason = ""
-                    block_basis = "uncertain_low_confidence_allow"
-                else:
-                    should_block = True
-                    block_reason = (
-                        block_reason
-                        or f"Low-confidence classification ({result.confidence:.2f}) treated as block"
-                    )
-                    block_basis = "uncertain_low_confidence_block"
-
-            classification_dict["block_basis"] = block_basis
-            classification_dict["block_reason"] = block_reason
-            
-            # Log the activity
-            if self.log_activity:
-                self._log_classification_event(
-                    domain=domain,
-                    url=url,
-                    result=result,
-                    is_blocked=should_block,
-                    block_reason=block_reason,
-                )
-            
-            if should_block:
-                return BlockingDecision(
-                    should_block=True,
-                    reason=block_reason,
-                    rule=BlockingRule(
-                        domain=domain,
-                        reason=block_reason,
-                        category=result.category,
-                    ),
-                    classification=classification_dict,
-                    budget_status=budget_status,
-                )
-            
-            # Even if not blocking, return classification info for transparency
-            return BlockingDecision(
-                should_block=False,
-                classification=classification_dict,
-                budget_status=budget_status,
-            )
-            
-        except Exception as e:
-            logger.warning("Classification-based blocking check failed: %s", e)
-            return BlockingDecision(should_block=False)
+        pipeline = self._get_pipeline()
+        decision, step_trace = pipeline.run(request, context_initializer=context_initializer)
+        # TODO (4.3): write decision log row with step_trace here
+        return decision
     
     def _log_classification_event(
         self,
