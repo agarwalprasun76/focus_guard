@@ -73,7 +73,8 @@ class BlockingDecisionLog:
         with self._lock:
             conn = sqlite3.connect(str(self._db_path))
             try:
-                conn.execute("""
+                cur = conn.cursor()
+                cur.execute("""
                     CREATE TABLE IF NOT EXISTS blocking_decision_log (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         timestamp_utc REAL NOT NULL,
@@ -86,9 +87,23 @@ class BlockingDecisionLog:
                         latency_ms REAL
                     )
                 """)
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_bdl_timestamp ON blocking_decision_log(timestamp_utc)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_bdl_domain ON blocking_decision_log(domain)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_bdl_final_decision ON blocking_decision_log(final_decision)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_bdl_timestamp ON blocking_decision_log(timestamp_utc)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_bdl_domain ON blocking_decision_log(domain)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_bdl_final_decision ON blocking_decision_log(final_decision)")
+
+                # Simple schema versioning: single-row schema_version table.
+                # Future migrations can inspect and bump this value.
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version INTEGER NOT NULL
+                    )
+                    """
+                )
+                row = cur.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                if row is None:
+                    cur.execute("INSERT INTO schema_version (version) VALUES (1)")
+
                 conn.commit()
             finally:
                 conn.close()

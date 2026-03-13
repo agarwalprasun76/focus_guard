@@ -43,7 +43,8 @@ class LLMClassificationLog:
         with self._lock:
             conn = sqlite3.connect(str(self._db_path))
             try:
-                conn.execute("""
+                cur = conn.cursor()
+                cur.execute("""
                     CREATE TABLE IF NOT EXISTS llm_classification_log (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         timestamp_utc REAL NOT NULL,
@@ -64,15 +65,27 @@ class LLMClassificationLog:
                         step_trace_json TEXT
                     )
                 """)
-                conn.execute(
+                cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_llm_log_timestamp ON llm_classification_log(timestamp_utc)"
                 )
-                conn.execute(
+                cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_llm_log_domain ON llm_classification_log(domain)"
                 )
-                conn.execute(
+                cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_llm_log_category ON llm_classification_log(category)"
                 )
+                # Simple schema versioning for future migrations.
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version INTEGER NOT NULL
+                    )
+                    """
+                )
+                row = cur.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                if row is None:
+                    cur.execute("INSERT INTO schema_version (version) VALUES (1)")
+
                 conn.commit()
             finally:
                 conn.close()

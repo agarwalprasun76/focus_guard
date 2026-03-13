@@ -454,6 +454,7 @@ class DomainUsageTracker:
         try:
             data = {
                 "daily_stats": {d: s.to_dict() for d, s in self._daily_stats.items()},
+                "schema_version": 1,
                 "last_updated": time.time(),
             }
             with open(self._data_file, 'w') as f:
@@ -1159,6 +1160,7 @@ class MasterDistractionBudget:
         try:
             data = {
                 "date": self._current_date,
+                "schema_version": 1,
                 "total_seconds": self._total_distraction_seconds,
                 "blocks_today": self._blocks_today,
                 "sites": [v.to_dict() for v in self._distraction_sites.values()],

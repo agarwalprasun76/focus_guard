@@ -112,6 +112,18 @@ class ActivityLogger:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_activity_category ON activity_log(classification_category)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_activity_blocked_timestamp ON activity_log(is_blocked, timestamp)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_activity_distracting_timestamp ON activity_log(is_distracting, timestamp)")
+
+                # Simple schema versioning table for future migrations.
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version INTEGER NOT NULL
+                    )
+                    """
+                )
+                row = cursor.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                if row is None:
+                    cursor.execute("INSERT INTO schema_version (version) VALUES (1)")
                 
                 conn.commit()
             finally:

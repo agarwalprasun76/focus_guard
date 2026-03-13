@@ -99,7 +99,8 @@ class SavedLinksStore:
                     try:
                         # Quick integrity check — catches corrupt / empty DBs
                         conn.execute("SELECT name FROM sqlite_master LIMIT 1")
-                        conn.execute("""
+                        cur = conn.cursor()
+                        cur.execute("""
                             CREATE TABLE IF NOT EXISTS saved_links (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                                 url TEXT NOT NULL,
@@ -112,18 +113,29 @@ class SavedLinksStore:
                                 viewed_at TEXT
                             )
                         """)
-                        conn.execute("""
+                        cur.execute("""
                             CREATE INDEX IF NOT EXISTS idx_saved_links_domain
                             ON saved_links(domain)
                         """)
-                        conn.execute("""
+                        cur.execute("""
                             CREATE INDEX IF NOT EXISTS idx_saved_links_saved_at
                             ON saved_links(saved_at)
                         """)
-                        conn.execute("""
+                        cur.execute("""
                             CREATE INDEX IF NOT EXISTS idx_saved_links_viewed_saved_at
                             ON saved_links(viewed, saved_at)
                         """)
+                        # Schema version row so future migrations can evolve the schema.
+                        cur.execute(
+                            """
+                            CREATE TABLE IF NOT EXISTS schema_version (
+                                version INTEGER NOT NULL
+                            )
+                            """
+                        )
+                        row = cur.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                        if row is None:
+                            cur.execute("INSERT INTO schema_version (version) VALUES (1)")
                         conn.commit()
                         return  # success
                     finally:

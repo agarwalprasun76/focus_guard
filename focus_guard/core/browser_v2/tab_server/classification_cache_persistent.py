@@ -49,14 +49,28 @@ class PersistentClassificationCache:
         with self._lock:
             conn = sqlite3.connect(str(self._db_path))
             try:
-                conn.execute("""
+                cur = conn.cursor()
+                cur.execute("""
                     CREATE TABLE IF NOT EXISTS classification_cache (
                         cache_key TEXT PRIMARY KEY,
                         result_json TEXT NOT NULL,
                         stored_at REAL NOT NULL
                     )
                 """)
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_cc_stored_at ON classification_cache(stored_at)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_cc_stored_at ON classification_cache(stored_at)")
+
+                # Simple schema version table so future migrations can evolve the cache.
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version INTEGER NOT NULL
+                    )
+                    """
+                )
+                row = cur.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                if row is None:
+                    cur.execute("INSERT INTO schema_version (version) VALUES (1)")
+
                 conn.commit()
             finally:
                 conn.close()

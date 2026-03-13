@@ -137,6 +137,17 @@ class SearchLogger:
                     CREATE INDEX IF NOT EXISTS idx_category 
                     ON search_log(classification_category)
                 """)
+                # Schema version table for future migrations.
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version INTEGER NOT NULL
+                    )
+                    """
+                )
+                row = cursor.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                if row is None:
+                    cursor.execute("INSERT INTO schema_version (version) VALUES (1)")
                 
                 conn.commit()
             finally:

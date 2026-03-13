@@ -238,6 +238,8 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             self._handle_mark_link_viewed()
         elif path == "/api/saved_links/delete":
             self._handle_delete_saved_link()
+        elif path == "/api/feedback/blocking":
+            self._handle_blocking_feedback()
         else:
             self._set_headers(HTTPStatus.NOT_FOUND)
             self.wfile.write(b'{"error": "Not found"}')
@@ -262,6 +264,77 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
         status.pop("token", None)
         self._set_headers(HTTPStatus.OK)
         self.wfile.write(json.dumps(status).encode("utf-8"))
+
+    # ------------------------------------------------------------------
+    # POST Handlers - feedback
+    # ------------------------------------------------------------------
+
+    def _handle_blocking_feedback(self) -> None:
+        """Record user feedback for a blocking decision (4.1 Layer 1).
+
+        Expected JSON body:
+            {
+                "url": "...",                 # required
+                "domain": "...",             # required
+                "feedback_type": "...",      # required, e.g. "blocked_should_be_allowed"
+                "source": "...",             # required, e.g. "blocked_page", "admin_ui"
+                "decision_id": 123,          # optional link to blocking_decision_log row
+                "comment": "...",            # optional free-text comment
+                "extra": { ... }             # optional structured payload
+            }
+        """
+        try:
+            body = self._read_json_body()
+        except Exception:
+            self._set_headers(HTTPStatus.BAD_REQUEST)
+            self.wfile.write(b'{"error": "Invalid JSON body"}')
+            return
+
+        url = str(body.get("url") or "").strip()
+        domain = str(body.get("domain") or "").strip()
+        feedback_type = str(body.get("feedback_type") or "").strip()
+        source = str(body.get("source") or "").strip()
+
+        if not url or not domain or not feedback_type or not source:
+            self._set_headers(HTTPStatus.BAD_REQUEST)
+            self.wfile.write(
+                b'{"error": "Missing required fields: url, domain, feedback_type, source"}'
+            )
+            return
+
+        decision_id_val = body.get("decision_id")
+        decision_id: Optional[int]
+        try:
+            decision_id = int(decision_id_val) if decision_id_val is not None else None
+        except (TypeError, ValueError):
+            decision_id = None
+
+        comment = body.get("comment")
+        extra = body.get("extra")
+
+        try:
+            from .blocking_feedback_log import get_blocking_feedback_log
+
+            log = get_blocking_feedback_log()
+            feedback_id = log.write(
+                url=url,
+                domain=domain,
+                feedback_type=feedback_type,
+                source=source,
+                decision_id=decision_id,
+                comment=comment,
+                extra=extra if isinstance(extra, dict) else None,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to persist blocking feedback: %s", exc)
+            self._set_headers(HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.wfile.write(b'{"error": "Failed to persist feedback"}')
+            return
+
+        self._set_headers(HTTPStatus.CREATED)
+        self.wfile.write(
+            json.dumps({"status": "ok", "feedback_id": feedback_id}).encode("utf-8")
+        )
 
     def _handle_health(self) -> None:
         """Return server health status."""
