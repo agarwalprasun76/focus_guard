@@ -3,12 +3,7 @@
 # CRITICAL: Set API key in environment
 import os
 
-# # Set the API key in environment for this session
-# api_key = "REDACTED_OPENAI_KEY_REMOVED"
-# os.environ['OPENAI_API_KEY'] = api_key
-# print(f"Set OPENAI_API_KEY environment variable")
-    
-# SECURITY: API key should be set via environment variable, not hardcoded
+# SECURITY: API key must be set via environment variable only (never hardcoded).
 # Set via: $env:OPENAI_API_KEY="your-key-here" (PowerShell) or export OPENAI_API_KEY="your-key-here" (bash)
 if 'OPENAI_API_KEY' not in os.environ:
     print("ERROR: OPENAI_API_KEY environment variable not set!")

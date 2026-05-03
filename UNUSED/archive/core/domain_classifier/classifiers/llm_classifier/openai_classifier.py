@@ -39,7 +39,7 @@ def load_config() -> Dict[str, Any]:
     """
     config_path = Path(__file__).parent / "config" / "openai_config.json"
     default_config = {
-        "api_key": "REDACTED_OPENAI_KEY_REMOVED",
+        "api_key": "",
         "models": {
             "default": "gpt-4o-mini",
             "standard": "gpt-4.1-mini",

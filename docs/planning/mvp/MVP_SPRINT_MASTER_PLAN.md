@@ -96,9 +96,9 @@ Calendar-style **Day 1–5** execution docs absorbed most of items **1–8** abo
 | 7 Install + docs | Done | `INSTALL_WINDOWS.md`, README, packaging script paths |
 | 8 First-run wizard | Done | Guardian dashboard handoff in wizard |
 | **9 Smoke + blocker burn** | **Automated slice done (Day 6)** | Baseline + matrix: `run_mvp_test_baseline.ps1`, `MVP_TEST_MATRIX.md`, `MVP_DAY6_HANDOFF.md`. **Manual** `MVP_SMOKE_TEST.md` recommended for full sign-off; **may be deferred** — see `MVP_DAY6_EXECUTION_PLAN.md` § Deferring manual smoke. |
-| 10 MVP freeze + handoff | **Done** | **Technical freeze** recorded `MVP_DAY7_HANDOFF.md` (RC label `mvp-rc-2026-05-03`, manual smoke deferred with waiver). Apply `git` tag on a clean commit when ready. |
+| 10 MVP freeze + handoff | **Done** | **Technical freeze** in `MVP_DAY7_HANDOFF.md`; RC snapshot committed on `main` (`mvp-rc-2026-05-03` message). Optional named `git` tag still available. Manual smoke deferred with waiver. |
 
-**Sprint closure (Day 7):** `MVP_DAY7_HANDOFF.md` — technical freeze recorded; optional `git tag mvp-rc-2026-05-03` on your chosen clean commit. Manual `MVP_SMOKE_TEST.md` can still run anytime — see `MVP_DAY6_EXECUTION_PLAN.md` § Deferring manual smoke. **Next:** post-MVP backlog in `FEATURE_REQUESTS_PARKING_LOT.md`.
+**Sprint closure (Day 7):** `MVP_DAY7_HANDOFF.md` — RC snapshot committed on `main`; optional `git tag mvp-rc-2026-05-03` on that commit. Manual `MVP_SMOKE_TEST.md` can still run anytime — see `MVP_DAY6_EXECUTION_PLAN.md` § Deferring manual smoke. **Next:** post-MVP backlog in `FEATURE_REQUESTS_PARKING_LOT.md`.
 
 ## Definition of Done
 - Critical tab_server tests green

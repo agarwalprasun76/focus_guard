@@ -10,8 +10,9 @@ Technical MVP freeze / release-candidate labeling per `MVP_DAY7_EXECUTION_PLAN.m
 
 ## Release candidate label
 
-- **Documented RC name:** `mvp-rc-2026-05-03` (use as a lightweight or annotated `git` tag on the commit you want to freeze).
-- **Tag applied in this session:** No. The working tree had many uncommitted changes at handoff time; apply the tag on a **clean** commit after you capture the snapshot you want to call RC.
+- **RC identifier:** `mvp-rc-2026-05-03` (commit message / milestone name).
+- **Frozen snapshot:** commit `b73d7c6873699c8abb2df83f744145db26fe1b8c` on branch `main` (short `b73d7c6`).
+- **Named `git` tag:** not present in the repo yet (`git tag` empty). Optional for discoverability: `git tag mvp-rc-2026-05-03 b73d7c6873699c8abb2df83f744145db26fe1b8c` then `git push origin mvp-rc-2026-05-03` if you use remote tags.
 
 ## Technical freeze criteria (declared met)
 
@@ -55,5 +56,6 @@ Complete `MVP_SMOKE_TEST.md` later, or treat this waiver as satisfying the “re
 
 ## Next actions (owner)
 
-1. Commit the snapshot you want frozen, then: `git tag mvp-rc-2026-05-03` (or annotated equivalent) on that commit.
-2. When ready, complete `docs/planning/mvp/MVP_SMOKE_TEST.md` and update this file or a short addendum with “manual smoke: pass / waivers.”
+1. ~~Commit the RC snapshot~~ **Done** — see **Frozen snapshot** above.
+2. **Optional:** add a lightweight or annotated tag `mvp-rc-2026-05-03` on that commit if you want a named ref (not required if the commit message is enough for your workflow).
+3. When ready, complete `docs/planning/mvp/MVP_SMOKE_TEST.md` and update this file or a short addendum with “manual smoke: pass / waivers.”

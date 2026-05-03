@@ -5,9 +5,9 @@ import os
 import asyncio
 from focus_guard.core.classification.classifiers.llm.openai_client import OpenAIClient
 
-# Set API key
-api_key = "REDACTED_OPENAI_KEY_REMOVED"
-os.environ['OPENAI_API_KEY'] = api_key
+api_key = os.environ.get("OPENAI_API_KEY")
+if not api_key:
+    raise SystemExit("Set OPENAI_API_KEY to run this ad-hoc OpenAI client check.")
 
 async def test_openai_client():
     """Test OpenAI client with gpt-5-nano."""
