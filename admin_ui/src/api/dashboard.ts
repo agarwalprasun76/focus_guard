@@ -72,12 +72,23 @@ export type DashboardRecentBlockedTab = {
 };
 
 export type DashboardResponse = {
+  generated_at_utc?: number;
   device: {
     id: string;
     name: string;
     status: string;
     enforcement_mode: string;
     last_seen: string | null;
+  };
+  kpis?: {
+    focus_score: number;
+    blocks_today: number;
+    overrides_today: number;
+    usage_percent: number;
+    total_events: number;
+    blocked_count: number;
+    distracting_count: number;
+    unviewed_saved_links: number;
   };
   focus_score: number;
   budget: {

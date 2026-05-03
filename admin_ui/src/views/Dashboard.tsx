@@ -291,7 +291,11 @@ export function Dashboard() {
     return <EmptyState message="Dashboard capability is unavailable in this runtime profile." />;
   }
 
-  const budgetPct = Math.min(100, Math.max(0, Math.round(dashboard.budget.percent)));
+  const kpis = dashboard.kpis;
+  const focusScore = kpis?.focus_score ?? dashboard.focus_score;
+  const blocksToday = kpis?.blocks_today ?? dashboard.blocks_today;
+  const overridesToday = kpis?.overrides_today ?? dashboard.overrides_today;
+  const budgetPct = Math.min(100, Math.max(0, Math.round(kpis?.usage_percent ?? dashboard.budget.percent)));
   const savedLinks = dashboard.saved_links ?? { total: 0, unviewed: 0, top_domains: [], recent: [] };
   const activitySummary = dashboard.activity_summary ?? {
     total_events: 0, blocked_count: 0, distracting_count: 0,
@@ -359,13 +363,13 @@ export function Dashboard() {
 
         <div className="mt-4 flex flex-col items-center gap-5 sm:flex-row sm:items-start">
           {/* Score ring */}
-          <FocusScoreRing score={dashboard.focus_score} />
+          <FocusScoreRing score={focusScore} />
 
           {/* Summary + budget */}
           <div className="flex-1 space-y-3">
             <div>
-              <p className={`text-lg font-semibold ${scoreColor(dashboard.focus_score)}`}>
-                {scoreVerdict(dashboard.focus_score)}
+              <p className={`text-lg font-semibold ${scoreColor(focusScore)}`}>
+                {scoreVerdict(focusScore)}
               </p>
               <p className="mt-1 text-sm text-gray-600">{buildNaturalSummary(dashboard)}</p>
             </div>
@@ -391,11 +395,11 @@ export function Dashboard() {
             <div className="flex flex-wrap gap-3">
               <div className="rounded-lg bg-red-50 px-3 py-1.5">
                 <span className="text-[10px] uppercase tracking-wide text-gray-500">Blocked</span>
-                <p className="text-sm font-bold text-red-700">{dashboard.blocks_today}</p>
+                  <p className="text-sm font-bold text-red-700">{blocksToday}</p>
               </div>
               <div className="rounded-lg bg-blue-50 px-3 py-1.5">
                 <span className="text-[10px] uppercase tracking-wide text-gray-500">Overrides</span>
-                <p className="text-sm font-bold text-blue-700">{dashboard.overrides_today}</p>
+                  <p className="text-sm font-bold text-blue-700">{overridesToday}</p>
               </div>
               <div className="rounded-lg bg-slate-50 px-3 py-1.5">
                 <span className="text-[10px] uppercase tracking-wide text-gray-500">Events</span>

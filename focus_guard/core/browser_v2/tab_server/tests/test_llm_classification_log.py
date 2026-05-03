@@ -35,6 +35,7 @@ class TestLLMClassificationLog:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT url, domain, category, usefulness, confidence, classifier_used, "
+                "llm_cost_usd, prompt_tokens, completion_tokens, total_tokens, "
                 "llm_escalation_attempted, llm_escalation_applied FROM llm_classification_log LIMIT 1"
             ).fetchone()
         assert row is not None
@@ -42,6 +43,8 @@ class TestLLMClassificationLog:
         assert row["domain"] == "example.com"
         assert row["category"] == "EDUCATION"
         assert row["confidence"] == 0.9
+        assert row["llm_cost_usd"] is None
+        assert row["prompt_tokens"] is None
         assert row["llm_escalation_attempted"] == 1
         assert row["llm_escalation_applied"] == 1
 
@@ -62,6 +65,12 @@ class TestLLMClassificationLog:
             is_distracting = True
             content_type = "video"
             classification_time_ms = 120.0
+            metadata = {
+                "llm_cost_usd": 0.0123,
+                "prompt_tokens": 321,
+                "completion_tokens": 44,
+                "total_tokens": 365,
+            }
 
         log_llm_classification(
             url="https://stream.com/",
@@ -72,5 +81,13 @@ class TestLLMClassificationLog:
             llm_escalation_applied=False,
         )
         with sqlite3.connect(str(db_path)) as conn:
-            n = conn.execute("SELECT COUNT(*) FROM llm_classification_log").fetchone()[0]
-        assert n == 1
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT llm_cost_usd, prompt_tokens, completion_tokens, total_tokens "
+                "FROM llm_classification_log LIMIT 1"
+            ).fetchone()
+        assert row is not None
+        assert row["llm_cost_usd"] == pytest.approx(0.0123)
+        assert row["prompt_tokens"] == 321
+        assert row["completion_tokens"] == 44
+        assert row["total_tokens"] == 365

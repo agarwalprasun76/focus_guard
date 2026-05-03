@@ -79,7 +79,9 @@ class EmailReporter:
                 db_path,
             )
             
-            stats = self._get_period_stats(db_path, start_time, end_time)
+            stats = self._normalize_report_stats(
+                self._get_period_stats(db_path, start_time, end_time)
+            )
             
             subject = f"[FocusGuard] Hourly Report - {self.config.machine_name} - {end_time.strftime('%H:%M')}"
             
@@ -267,7 +269,12 @@ class EmailReporter:
             else:
                 report_date = date
             
-            stats = self._get_daily_stats(db_path, report_date)
+            try:
+                stats = self._get_daily_stats(db_path, report_date)
+            except Exception as stats_exc:
+                logger.warning("Daily stats retrieval failed, using fallback stats: %s", stats_exc)
+                stats = {"date": report_date}
+            stats = self._normalize_report_stats(stats)
             
             subject = f"[FocusGuard] Daily Report - {self.config.machine_name} - {report_date}"
             
@@ -523,6 +530,21 @@ class EmailReporter:
 
         return stats
 
+    def _normalize_report_stats(self, stats: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Ensure report stats always contain the minimum keys expected by renderers."""
+        normalized: Dict[str, Any] = dict(stats or {})
+        normalized.setdefault('sessions_count', 0)
+        normalized.setdefault('total_active_time', 0.0)
+        normalized.setdefault('total_monitored_time', 0.0)
+        normalized.setdefault('total_idle_time', 0.0)
+        normalized.setdefault('blocked_count', 0)
+        normalized.setdefault('override_count', 0)
+        normalized.setdefault('top_applications', [])
+        normalized.setdefault('top_domains', [])
+        normalized.setdefault('visible_applications', [])
+        normalized.setdefault('hourly_breakdown', [])
+        return normalized
+
     def _get_override_count_for_period(self, start_time: datetime, end_time: datetime) -> int:
         """Count override grants in the period by reading override_log.json if present."""
         start_ts = start_time.timestamp()
@@ -560,9 +582,14 @@ class EmailReporter:
         Reuses SQLiteUsageDatabase.get_daily_stats() for core data,
         then adds hourly breakdown if configured.
         """
-        # Use existing database class for core stats (DRY)
-        db = SQLiteUsageDatabase(str(db_path))
-        stats = db.get_daily_stats(date)
+        # Use existing database class for core stats (DRY), but fall back gracefully
+        # if data retrieval fails so daily report rendering can still proceed.
+        try:
+            db = SQLiteUsageDatabase(str(db_path))
+            stats = db.get_daily_stats(date)
+        except Exception as exc:
+            logger.warning("Error getting daily stats from SQLiteUsageDatabase: %s", exc)
+            stats = {"date": date}
         
         # Add hourly breakdown if configured (not in core class)
         stats['hourly_breakdown'] = []
@@ -586,7 +613,7 @@ class EmailReporter:
             except Exception as e:
                 logger.error(f"Error getting hourly breakdown: {e}")
         
-        return stats
+        return self._normalize_report_stats(stats)
     
     def _admin_urls(self) -> tuple[str, str]:
         """Return (admin dashboard URL, health/status URL) for use in email links."""
@@ -610,7 +637,8 @@ class EmailReporter:
     def _generate_hourly_report_html(self, stats: Dict[str, Any], 
                                       start_time: datetime, end_time: datetime) -> str:
         """Generate HTML content for hourly report."""
-        active_mins = stats['total_active_time'] / 60
+        stats = self._normalize_report_stats(stats)
+        active_mins = float(stats.get('total_active_time', 0.0) or 0.0) / 60
         admin_url, status_url = self._admin_urls()
         
         html = f"""
@@ -643,7 +671,7 @@ class EmailReporter:
             <h2>📊 Summary</h2>
             <div class="summary">
                 <p>Active Time: <span class="metric">{active_mins:.1f} minutes</span></p>
-                <p>Sessions: <span class="metric">{stats['sessions_count']}</span></p>
+                <p>Sessions: <span class="metric">{int(stats.get('sessions_count', 0) or 0)}</span></p>
         """
         popup_ctx = self._fetch_focus_score_from_tab_server()
         if popup_ctx is not None:
@@ -664,13 +692,13 @@ class EmailReporter:
             </div>
             """
         
-        if stats['top_applications']:
+        if stats.get('top_applications'):
             html += """
             <h2>📱 Top Applications</h2>
             <table>
                 <tr><th>#</th><th>Application</th><th>Time (min)</th></tr>
             """
-            for i, app in enumerate(stats['top_applications'], 1):
+            for i, app in enumerate(stats.get('top_applications', []), 1):
                 display_name = app['app_name']
                 if display_name.lower().endswith('.exe'):
                     display_name = display_name[:-4]
@@ -678,13 +706,13 @@ class EmailReporter:
                 html += f"<tr><td>{i}</td><td>{display_name}</td><td>{mins:.1f}</td></tr>"
             html += "</table>"
         
-        if stats['top_domains']:
+        if stats.get('top_domains'):
             html += """
             <h2>🌐 Top Domains</h2>
             <table>
                 <tr><th>#</th><th>Domain</th><th>Time (min)</th></tr>
             """
-            for i, domain in enumerate(stats['top_domains'], 1):
+            for i, domain in enumerate(stats.get('top_domains', []), 1):
                 mins = domain['total_time'] / 60
                 html += f"<tr><td>{i}</td><td>{domain['domain']}</td><td>{mins:.1f}</td></tr>"
             html += "</table>"
@@ -714,8 +742,9 @@ class EmailReporter:
     
     def _generate_daily_report_html(self, stats: Dict[str, Any], date: str) -> str:
         """Generate HTML content for daily report."""
-        active_hours = stats['total_active_time'] / 3600
-        active_mins = stats['total_active_time'] / 60
+        stats = self._normalize_report_stats(stats)
+        active_hours = float(stats.get('total_active_time', 0.0) or 0.0) / 3600
+        active_mins = float(stats.get('total_active_time', 0.0) or 0.0) / 60
         
         html = f"""
         <html>
@@ -747,21 +776,21 @@ class EmailReporter:
                 <p>Total Active Time: <span class="metric">{active_hours:.2f} hours ({active_mins:.0f} min)</span></p>
                 <p>Total Monitored Time: <span class="metric">{stats.get('total_monitored_time', 0)/3600:.2f} hours ({stats.get('total_monitored_time', 0)/60:.0f} min)</span></p>
                 <p>Idle Time: <span class="metric">{stats.get('total_idle_time', 0)/60:.0f} min</span></p>
-                <p>Total Sessions: <span class="metric">{stats['sessions_count']}</span></p>
+                <p>Total Sessions: <span class="metric">{int(stats.get('sessions_count', 0) or 0)}</span></p>
             </div>
         """
         
         # Build comprehensive app view combining active time and visibility
         html += self._build_comprehensive_apps_table(stats)
         
-        if stats['top_domains']:
+        if stats.get('top_domains'):
             html += """
             <h2>🌐 Top Domains</h2>
             <table>
                 <tr><th>#</th><th>Domain</th><th>Time</th><th>%</th></tr>
             """
-            total_time = stats['total_active_time'] or 1
-            for i, domain in enumerate(stats['top_domains'], 1):
+            total_time = float(stats.get('total_active_time', 0.0) or 0.0) or 1
+            for i, domain in enumerate(stats.get('top_domains', []), 1):
                 mins = domain['total_time'] / 60
                 pct = (domain['total_time'] / total_time) * 100
                 html += f"<tr><td>{i}</td><td>{domain['domain']}</td><td>{mins:.1f} min</td><td>{pct:.1f}%</td></tr>"

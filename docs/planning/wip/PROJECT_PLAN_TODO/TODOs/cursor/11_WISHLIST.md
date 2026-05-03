@@ -114,6 +114,9 @@ Currently it seems we are doing the opposite
 
 ## On the settings page include a link to some sort of a user guide that explains the actions. I also noticed certain domains cant be allowed/blocked. For eg outlook.com, is it because they are whitelisted.
 
+## On the email report that gets sent out should we add for which domains was override used.
+
+
 ## How to Use This List
 
 

@@ -65,6 +65,8 @@ Gain insights into your digital habits:
 - [API Reference](./docs/api/)
 - [Developer Guide](./docs/DEVELOPER.md)
 - [Testing Guide](./docs/TESTING.md)
+- [MVP Windows Install Guide](./docs/planning/mvp/INSTALL_WINDOWS.md)
+- [MVP Day 7 handoff](./docs/planning/mvp/MVP_DAY7_HANDOFF.md) (technical freeze / RC notes)
 
 ## Contributing
 

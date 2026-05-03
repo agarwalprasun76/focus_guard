@@ -11,6 +11,11 @@ import subprocess
 import shutil
 from pathlib import Path
 
+WINDOWS_DIR = Path(__file__).resolve().parent.parent
+APPLICATION_DIR = WINDOWS_DIR.parent
+DIST_DIR = APPLICATION_DIR / "dist"
+BUILD_DIR = APPLICATION_DIR / "build"
+
 def check_pyinstaller():
     """Check if PyInstaller is installed."""
     try:
@@ -84,7 +89,17 @@ def build_executable(spec_file, name):
     
     try:
         # Run PyInstaller
-        cmd = [sys.executable, "-m", "PyInstaller", str(spec_path), "--clean"]
+        cmd = [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            str(spec_path),
+            "--clean",
+            "--distpath",
+            str(DIST_DIR),
+            "--workpath",
+            str(BUILD_DIR),
+        ]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         print(f"+ {name} built successfully")
         return True
@@ -142,7 +157,7 @@ echo.
 pause
 '''
     
-    installer_path = Path(__file__).parent / "dist" / "install_focus_guard.bat"
+    installer_path = DIST_DIR / "install_focus_guard.bat"
     installer_path.parent.mkdir(exist_ok=True)
     
     with open(installer_path, 'w', encoding='utf-8') as f:
@@ -151,6 +166,9 @@ pause
     print(f"+ Created installer: {installer_path}")
 
 def main():
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+
     """Main build process."""
     print("Focus Guard Windows .exe Builder")
     print("=" * 40)
@@ -184,7 +202,7 @@ def main():
         print("+ All executables built successfully!")
         print("\nNext steps:")
         print("1. Test executables in deployment/application/dist/ directory")
-        print("2. Run deployment/installer/windows/install_focus_guard.bat to install system-wide")
+        print("2. Run deployment/application/dist/install_focus_guard.bat to install locally")
         print("3. Deploy browser extension using deployment/tools/deploy.py")
         return 0
     else:

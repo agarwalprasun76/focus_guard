@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
+import time
 
 from focus_guard.core.admin_gateway.services.tab_server_client import (
     TabServerClient,
@@ -115,12 +116,23 @@ class DashboardService:
         focus_score = max(0, min(100, int(round(100 - usage_percent))))
 
         return {
+            "generated_at_utc": time.time(),
             "device": {
                 "id": target_device,
                 "name": target_device,
                 "status": "online" if health else "offline",
                 "enforcement_mode": enforcement.get("enforcement_mode", "enforcing"),
                 "last_seen": None,
+            },
+            "kpis": {
+                "focus_score": focus_score,
+                "blocks_today": int(budget.get("blocks_today", 0) or 0),
+                "overrides_today": int(override_stats.get("total_overrides", 0) or 0),
+                "usage_percent": usage_percent,
+                "total_events": int(activity_stats.get("total_events", 0) or 0),
+                "blocked_count": int(activity_stats.get("blocked_count", 0) or 0),
+                "distracting_count": int(activity_stats.get("distracting_count", 0) or 0),
+                "unviewed_saved_links": int(saved_links_stats.get("unviewed", 0) or 0),
             },
             "focus_score": focus_score,
             "budget": {

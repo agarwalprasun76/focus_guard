@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any, Dict, Optional
 
 from .blocking import BlockingRule
@@ -28,6 +29,15 @@ from .classification_blocker import (
 
 def _blocker(request: BlockingRequest, ctx: BlockingContext):
     return ctx.get("_blocker")
+
+
+def _llm_observability_enabled() -> bool:
+    """Feature flag for non-essential LLM observability writes."""
+    return os.getenv("FOCUS_GUARD_ENABLE_LLM_OBSERVABILITY", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +265,7 @@ def step_classification(request: BlockingRequest, ctx: BlockingContext) -> Optio
 
     # Persist LLM classifications for auditability (harder/more controversial decisions)
     final_source = blocker._decision_source_from_classifier(result.classifier_used)
-    if final_source == "llm":
+    if final_source == "llm" and _llm_observability_enabled():
         try:
             from .llm_classification_log import log_llm_classification
             log_llm_classification(

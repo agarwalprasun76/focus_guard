@@ -59,12 +59,31 @@ class LLMClassificationLog:
                         is_distracting INTEGER NOT NULL DEFAULT 0,
                         content_type TEXT,
                         classification_time_ms REAL,
+                        llm_cost_usd REAL,
+                        prompt_tokens INTEGER,
+                        completion_tokens INTEGER,
+                        total_tokens INTEGER,
                         llm_escalation_attempted INTEGER DEFAULT 0,
                         llm_escalation_applied INTEGER DEFAULT 0,
                         request_context_json TEXT,
                         step_trace_json TEXT
                     )
                 """)
+                # Backward-compatible migration for existing DBs created before
+                # these observability fields existed.
+                for col_name, col_type in (
+                    ("llm_cost_usd", "REAL"),
+                    ("prompt_tokens", "INTEGER"),
+                    ("completion_tokens", "INTEGER"),
+                    ("total_tokens", "INTEGER"),
+                ):
+                    try:
+                        cur.execute(
+                            f"ALTER TABLE llm_classification_log ADD COLUMN {col_name} {col_type}"
+                        )
+                    except sqlite3.OperationalError:
+                        # Column already exists.
+                        pass
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_llm_log_timestamp ON llm_classification_log(timestamp_utc)"
                 )
@@ -104,6 +123,10 @@ class LLMClassificationLog:
         is_distracting: bool = False,
         content_type: str = "unknown",
         classification_time_ms: float = 0.0,
+        llm_cost_usd: Optional[float] = None,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
+        total_tokens: Optional[int] = None,
         llm_escalation_attempted: bool = False,
         llm_escalation_applied: bool = False,
         request_context: Optional[Dict[str, Any]] = None,
@@ -120,9 +143,10 @@ class LLMClassificationLog:
                             timestamp_utc, url, domain, title,
                             category, usefulness, confidence, reason, classifier_used,
                             is_distracting, content_type, classification_time_ms,
+                            llm_cost_usd, prompt_tokens, completion_tokens, total_tokens,
                             llm_escalation_attempted, llm_escalation_applied,
                             request_context_json, step_trace_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             time.time(),
@@ -137,6 +161,10 @@ class LLMClassificationLog:
                             1 if is_distracting else 0,
                             content_type or "unknown",
                             classification_time_ms,
+                            llm_cost_usd,
+                            prompt_tokens,
+                            completion_tokens,
+                            total_tokens,
                             1 if llm_escalation_attempted else 0,
                             1 if llm_escalation_applied else 0,
                             json.dumps(request_context)[:16384] if request_context else None,
@@ -172,6 +200,14 @@ def log_llm_classification(
     llm_escalation_applied: bool = False,
 ) -> None:
     """Convenience: persist one LLM classification from a ClassificationResult-like object."""
+    metadata = getattr(result, "metadata", {}) or {}
+    llm_cost_usd = metadata.get("llm_cost_usd")
+    if llm_cost_usd is None:
+        llm_cost_usd = metadata.get("cost_usd", metadata.get("estimated_cost_usd"))
+    prompt_tokens = metadata.get("prompt_tokens", metadata.get("input_tokens"))
+    completion_tokens = metadata.get("completion_tokens", metadata.get("output_tokens"))
+    total_tokens = metadata.get("total_tokens")
+
     usefulness = getattr(result, "usefulness", None)
     usefulness_str = usefulness.value if hasattr(usefulness, "value") else str(usefulness or "")
     get_llm_classification_log().log(
@@ -186,6 +222,10 @@ def log_llm_classification(
         is_distracting=getattr(result, "is_distracting", False),
         content_type=getattr(result, "content_type", "unknown"),
         classification_time_ms=getattr(result, "classification_time_ms", 0.0),
+        llm_cost_usd=float(llm_cost_usd) if llm_cost_usd is not None else None,
+        prompt_tokens=int(prompt_tokens) if prompt_tokens is not None else None,
+        completion_tokens=int(completion_tokens) if completion_tokens is not None else None,
+        total_tokens=int(total_tokens) if total_tokens is not None else None,
         llm_escalation_attempted=llm_escalation_attempted,
         llm_escalation_applied=llm_escalation_applied,
         request_context=request_context,

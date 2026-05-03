@@ -291,7 +291,7 @@ def test_send_hourly_report_uses_schedule_interval_minutes(tmp_path: Path) -> No
 
 
 def test_hourly_fallback_uses_visible_windows_when_sessions_have_zero_active_time(tmp_path: Path) -> None:
-    """Fallback should still recover activity when overlapping sessions have 0 active duration."""
+    """Open sessions with zero stored active_duration should use overlap estimation."""
     db_path = tmp_path / "usage.db"
 
     with sqlite3.connect(str(db_path)) as conn:
@@ -351,7 +351,8 @@ def test_hourly_fallback_uses_visible_windows_when_sessions_have_zero_active_tim
     )
 
     assert stats["sessions_count"] >= 1
-    assert stats["total_active_time"] == 10.0
+    # Overlap estimate from 11:00 to 11:20 => 1200 seconds.
+    assert stats["total_active_time"] == 1200.0
     assert stats["top_applications"]
 
 
@@ -423,7 +424,7 @@ def test_hourly_period_stats_prefers_activity_samples_when_available(tmp_path: P
 
 
 def test_hourly_fallback_uses_visible_windows_when_activity_samples_empty(tmp_path: Path) -> None:
-    """If activity_samples exists but has no rows, visible_windows fallback should still apply."""
+    """With empty samples, overlap-estimated session time remains authoritative."""
     db_path = tmp_path / "usage.db"
 
     with sqlite3.connect(str(db_path)) as conn:
@@ -498,6 +499,36 @@ def test_hourly_fallback_uses_visible_windows_when_activity_samples_empty(tmp_pa
         datetime(2026, 2, 15, 12, 0, 0),
     )
 
-    assert stats["total_active_time"] == 15.0
+    # Overlap estimate from 11:00 to 11:20 => 1200 seconds.
+    assert stats["total_active_time"] == 1200.0
     assert stats["top_applications"]
     assert stats["top_applications"][0]["app_name"] == "Code.exe"
+
+
+def test_daily_report_sends_with_fallback_stats_when_daily_stats_fail(tmp_path: Path) -> None:
+    """Daily report should still send using fallback stats when DB stats retrieval fails."""
+    db_path = tmp_path / "usage.db"
+    db_path.write_text("")
+
+    config = DeploymentConfig()
+    config.email.enabled = True
+    config.email.smtp_username = "user@example.com"
+    config.email.smtp_password = "app-password"
+    config.email.sender_email = "focusguard@example.com"
+    config.email.recipients = ["parent@example.com"]
+
+    reporter = EmailReporter(config)
+    reporter._get_daily_stats = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("db unavailable"))  # type: ignore[method-assign]
+    reporter._send_email = lambda *_args, **_kwargs: True  # type: ignore[method-assign]
+
+    assert reporter.send_daily_report(db_path, date="2026-02-15") is True
+
+
+def test_generate_daily_report_html_handles_sparse_stats() -> None:
+    """Daily report HTML generation should not require every stats key."""
+    reporter = EmailReporter(DeploymentConfig())
+
+    html = reporter._generate_daily_report_html({"total_active_time": 0}, "2026-02-15")
+
+    assert "Daily Summary" in html
+    assert "Total Sessions" in html

@@ -152,6 +152,25 @@ class BlockingDecisionLog:
             logger.warning("Failed to write blocking decision log: %s", e)
             return None
 
+    def exists(self, decision_id: int) -> bool:
+        """Return True when a decision row exists for the given id."""
+        if decision_id <= 0:
+            return False
+        try:
+            with self._lock:
+                conn = sqlite3.connect(str(self._db_path))
+                try:
+                    row = conn.execute(
+                        "SELECT 1 FROM blocking_decision_log WHERE id = ? LIMIT 1",
+                        (decision_id,),
+                    ).fetchone()
+                    return row is not None
+                finally:
+                    conn.close()
+        except Exception as e:
+            logger.warning("Failed to check blocking decision existence: %s", e)
+            return False
+
 
 _instance: Optional[BlockingDecisionLog] = None
 

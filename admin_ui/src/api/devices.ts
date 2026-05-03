@@ -18,3 +18,24 @@ export type DevicesResponse = {
 export function listDevices(): Promise<DevicesResponse> {
   return requestJson<DevicesResponse>("/devices");
 }
+
+export type SetDeviceEnforcementInput = {
+  mode: "tracking" | "advisory" | "enforcing";
+  password?: string;
+};
+
+export type SetDeviceEnforcementResponse = {
+  updated: boolean;
+  device_id: string;
+  mode: "tracking" | "advisory" | "enforcing";
+};
+
+export function setDeviceEnforcement(
+  deviceId: string,
+  input: SetDeviceEnforcementInput,
+): Promise<SetDeviceEnforcementResponse> {
+  return requestJson<SetDeviceEnforcementResponse>(`/devices/${encodeURIComponent(deviceId)}/enforcement`, {
+    method: "PUT",
+    body: input,
+  });
+}

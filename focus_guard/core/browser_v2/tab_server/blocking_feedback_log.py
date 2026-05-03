@@ -131,6 +131,64 @@ class BlockingFeedbackLog:
             logger.warning("Failed to write blocking feedback: %s", exc)
             return None
 
+    def list_recent(
+        self,
+        *,
+        decision_id: Optional[int] = None,
+        limit: int = 50,
+    ) -> list[Dict[str, Any]]:
+        """Return recent feedback rows, optionally filtered by decision_id."""
+        safe_limit = max(1, min(int(limit), 200))
+        query = (
+            "SELECT id, created_at_utc, decision_id, url, domain, feedback_type, source, comment, extra_json "
+            "FROM blocking_feedback"
+        )
+        args: list[Any] = []
+        if decision_id is not None:
+            query += " WHERE decision_id = ?"
+            args.append(int(decision_id))
+        query += " ORDER BY id DESC LIMIT ?"
+        args.append(safe_limit)
+
+        try:
+            with self._lock:
+                conn = sqlite3.connect(str(self._db_path))
+                conn.row_factory = sqlite3.Row
+                try:
+                    rows = conn.execute(query, tuple(args)).fetchall()
+                finally:
+                    conn.close()
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning("Failed to list blocking feedback: %s", exc)
+            return []
+
+        out: list[Dict[str, Any]] = []
+        for row in rows:
+            extra_json = row["extra_json"]
+            extra: Optional[Dict[str, Any]] = None
+            if extra_json:
+                try:
+                    parsed = json.loads(extra_json)
+                    if isinstance(parsed, dict):
+                        extra = parsed
+                except Exception:
+                    extra = None
+
+            out.append(
+                {
+                    "id": int(row["id"]),
+                    "created_at_utc": float(row["created_at_utc"]),
+                    "decision_id": int(row["decision_id"]) if row["decision_id"] is not None else None,
+                    "url": row["url"],
+                    "domain": row["domain"],
+                    "feedback_type": row["feedback_type"],
+                    "source": row["source"],
+                    "comment": row["comment"],
+                    "extra": extra,
+                }
+            )
+        return out
+
 
 _instance: Optional[BlockingFeedbackLog] = None
 

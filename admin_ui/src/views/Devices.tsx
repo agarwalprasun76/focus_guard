@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiClientError, devicesApi } from "../api";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
@@ -6,11 +7,42 @@ import { EmptyState, ErrorState, LoadingState, OfflineState } from "../ui/QueryS
 
 export function Devices() {
   const online = useOnlineStatus();
+  const queryClient = useQueryClient();
+  const [pendingMode, setPendingMode] = useState<{
+    deviceId: string;
+    mode: "tracking" | "advisory" | "enforcing";
+  } | null>(null);
+  const [password, setPassword] = useState("");
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
 
   const devicesQuery = useQuery({
     queryKey: ["devices"],
     queryFn: () => devicesApi.listDevices(),
     refetchInterval: online ? 30000 : false,
+  });
+
+  const setModeMutation = useMutation({
+    mutationFn: ({ deviceId, mode }: { deviceId: string; mode: "tracking" | "advisory" | "enforcing" }) =>
+      devicesApi.setDeviceEnforcement(deviceId, {
+        mode,
+        password: password || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["devices"] });
+      queryClient.invalidateQueries({ queryKey: ["settings-enforcement"] });
+      setPendingMode(null);
+      setPassword("");
+      setShowPasswordPrompt(false);
+    },
+    onError: (error) => {
+      if (
+        error instanceof ApiClientError &&
+        (error.message.toLowerCase().includes("password required") ||
+          error.message.toLowerCase().includes("password_required"))
+      ) {
+        setShowPasswordPrompt(true);
+      }
+    },
   });
 
   if (devicesQuery.isLoading) {
@@ -50,11 +82,81 @@ export function Devices() {
                 <p className="mt-1 text-xs text-gray-500">
                   {status} • {mode} • browsers {browsers}
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {(["tracking", "advisory", "enforcing"] as const).map((candidateMode) => (
+                    <button
+                      key={`${id}-${candidateMode}`}
+                      type="button"
+                      disabled={setModeMutation.isPending}
+                      onClick={() => {
+                        if (candidateMode !== mode) {
+                          setPendingMode({ deviceId: id, mode: candidateMode });
+                          setShowPasswordPrompt(false);
+                          setPassword("");
+                          setModeMutation.mutate({ deviceId: id, mode: candidateMode });
+                        }
+                      }}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                        candidateMode === mode
+                          ? "bg-ocean text-white"
+                          : "border border-slate-200 text-gray-600 hover:bg-slate-50"
+                      } disabled:opacity-50`}
+                    >
+                      {candidateMode}
+                    </button>
+                  ))}
+                </div>
               </li>
             );
           })}
         </ul>
       )}
+      {showPasswordPrompt && pendingMode ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs text-gray-700">
+            Admin password required to set <strong>{pendingMode.deviceId}</strong> to{" "}
+            <strong>{pendingMode.mode}</strong>.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+              placeholder="Admin password"
+            />
+            <button
+              type="button"
+              disabled={setModeMutation.isPending || !password}
+              onClick={() => setModeMutation.mutate(pendingMode)}
+              className="rounded bg-ocean px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPasswordPrompt(false);
+                setPendingMode(null);
+                setPassword("");
+              }}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {setModeMutation.isError ? (
+        <p className="text-xs text-red-600">
+          {setModeMutation.error instanceof ApiClientError
+            ? setModeMutation.error.message
+            : "Failed to update device enforcement mode"}
+        </p>
+      ) : null}
+      {setModeMutation.isSuccess ? (
+        <p className="text-xs text-emerald-600">Device enforcement mode updated.</p>
+      ) : null}
     </div>
   );
 }

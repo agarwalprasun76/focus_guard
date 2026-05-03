@@ -1012,6 +1012,25 @@ class FinishPage(QWizardPage):
 
         layout.addWidget(_separator())
 
+        # --- Guardian/Admin Dashboard handoff ---
+        admin_group = QGroupBox("Parent/Guardian Dashboard")
+        admin_layout = QVBoxLayout()
+        admin_url = "http://127.0.0.1:58393/admin"
+        admin_layout.addWidget(
+            _body(
+                "Use the Guardian Dashboard to review activity, adjust rules, and manage settings.\n"
+                f"Dashboard URL: {admin_url}"
+            )
+        )
+        open_dashboard_btn = QPushButton("Open Guardian Dashboard")
+        open_dashboard_btn.setToolTip("Opens the local admin dashboard in your default browser")
+        open_dashboard_btn.clicked.connect(lambda: webbrowser.open(admin_url))
+        admin_layout.addWidget(open_dashboard_btn)
+        admin_group.setLayout(admin_layout)
+        layout.addWidget(admin_group)
+
+        layout.addWidget(_separator())
+
         # --- Enforcement mode ---
         mode_group = QGroupBox("Enforcement Mode")
         mode_layout = QVBoxLayout()

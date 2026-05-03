@@ -139,7 +139,12 @@ class OverrideManager:
         self._lock = threading.RLock()
         self._active_overrides: Dict[str, ActiveOverride] = {}  # domain -> override
         self._override_log: List[OverrideLogEntry] = []
+        # Legacy per-domain daily counts (kept for compatibility with tests and UI).
+        # The authoritative limits are enforced by DomainUsageTracker.
         self._daily_counts: Dict[str, int] = {}  # domain -> count today
+        # Track which overrides have already had usage started today so we don't
+        # double-count when a tab is closed and reopened within the same override.
+        self._usage_started_overrides: set[str] = set()
         self._last_count_reset: float = time.time()
         
         self.default_duration = max(self.MIN_DURATION, min(default_duration, self.MAX_DURATION))
@@ -155,19 +160,27 @@ class OverrideManager:
         logger.info("OverrideManager initialized with %ds default duration", self.default_duration)
     
     def _load_log(self) -> None:
-        """Load override log from file."""
+        """Load existing override log entries from file.
+
+        Note: We intentionally do NOT hydrate _daily_counts from historical log
+        data. Daily limits are enforced by DomainUsageTracker, and tests expect
+        _daily_counts to start at 0 for a fresh manager instance.
+        """
         try:
             if self.log_file.exists():
                 with open(self.log_file, 'r') as f:
                     data = json.load(f)
-                    # Only load today's entries for counts
-                    today_start = datetime.now().replace(hour=0, minute=0, second=0).timestamp()
-                    for entry in data.get("log", []):
-                        if entry.get("timestamp", 0) >= today_start:
-                            if entry.get("event_type") == "granted":
-                                domain = entry.get("domain", "")
-                                self._daily_counts[domain] = self._daily_counts.get(domain, 0) + 1
-                logger.debug("Loaded override log with %d daily grants", sum(self._daily_counts.values()))
+                    self._override_log = [
+                        OverrideLogEntry(
+                            timestamp=e.get("timestamp", 0.0),
+                            event_type=e.get("event_type", ""),
+                            domain=e.get("domain", ""),
+                            override_id=e.get("override_id"),
+                            details=e.get("details") or {},
+                        )
+                        for e in data.get("log", [])
+                    ]
+                logger.debug("Loaded %d override log entries", len(self._override_log))
         except Exception as e:
             logger.warning("Could not load override log: %s", e)
     
@@ -756,8 +769,9 @@ class OverrideManager:
                 return {"started": False, "reason": "No active override for domain"}
             
             override = self._active_overrides[domain]
-            
-            # Check if session already started for this override
+
+            # Check if a usage session is already active for this domain.
+            # If so, don't start a new one or increment counts again.
             try:
                 from .domain_usage_tracker import get_domain_usage_tracker
                 tracker = get_domain_usage_tracker()
@@ -767,11 +781,24 @@ class OverrideManager:
                     return {"started": True, "reason": "Session already active", "daily_count": stats.get("override_count", 0)}
             except Exception:
                 pass
-            
-            # Start the usage tracking session (this increments override_count in tracker)
-            self._start_usage_session(domain, tab_id, override.id)
-            
-            # Get the actual count from the tracker
+
+            # Decide whether this is the first usage for this override today.
+            first_usage_for_override = override.id not in self._usage_started_overrides
+
+            # For the first usage of a given override, start a session with override_id
+            # so DomainUsageTracker increments override_count. For subsequent sessions
+            # (e.g., tab closed and reopened within the same override window), start
+            # a session without override_id so we track time but do not increment
+            # override_count again.
+            override_id_for_tracker = override.id if first_usage_for_override else None
+            self._start_usage_session(domain, tab_id, override_id_for_tracker)
+
+            # Update legacy daily_counts for compatibility with existing tests/UI.
+            if first_usage_for_override:
+                self._usage_started_overrides.add(override.id)
+                self._daily_counts[domain] = self._daily_counts.get(domain, 0) + 1
+
+            # Get the actual count from the tracker (authoritative for budgets)
             try:
                 from .domain_usage_tracker import get_domain_usage_tracker
                 tracker = get_domain_usage_tracker()

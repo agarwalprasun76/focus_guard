@@ -166,6 +166,10 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_weekly_summary()
         elif path == "/api/analytics/heatmap":
             self._handle_get_usage_heatmap(params)
+        elif path == "/api/feedback/blocking":
+            if not self._require_auth():
+                return
+            self._handle_get_blocking_feedback(params)
         else:
             self._set_headers(HTTPStatus.NOT_FOUND)
             self.wfile.write(b'{"error": "Not found"}')
@@ -292,13 +296,42 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
 
         url = str(body.get("url") or "").strip()
         domain = str(body.get("domain") or "").strip()
-        feedback_type = str(body.get("feedback_type") or "").strip()
-        source = str(body.get("source") or "").strip()
+        feedback_type = str(body.get("feedback_type") or "").strip().lower()
+        source = str(body.get("source") or "").strip().lower()
+        allowed_feedback_types = {
+            "blocked_should_be_allowed",
+            "allowed_should_be_blocked",
+            "wrong_category",
+            "other",
+        }
+        allowed_sources = {"blocked_page", "admin_ui", "extension", "api"}
 
         if not url or not domain or not feedback_type or not source:
             self._set_headers(HTTPStatus.BAD_REQUEST)
             self.wfile.write(
                 b'{"error": "Missing required fields: url, domain, feedback_type, source"}'
+            )
+            return
+        if feedback_type not in allowed_feedback_types:
+            self._set_headers(HTTPStatus.BAD_REQUEST)
+            self.wfile.write(
+                json.dumps(
+                    {
+                        "error": "Invalid feedback_type",
+                        "allowed_feedback_types": sorted(allowed_feedback_types),
+                    }
+                ).encode("utf-8")
+            )
+            return
+        if source not in allowed_sources:
+            self._set_headers(HTTPStatus.BAD_REQUEST)
+            self.wfile.write(
+                json.dumps(
+                    {
+                        "error": "Invalid source",
+                        "allowed_sources": sorted(allowed_sources),
+                    }
+                ).encode("utf-8")
             )
             return
 
@@ -307,7 +340,29 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
         try:
             decision_id = int(decision_id_val) if decision_id_val is not None else None
         except (TypeError, ValueError):
-            decision_id = None
+            self._set_headers(HTTPStatus.BAD_REQUEST)
+            self.wfile.write(b'{"error": "decision_id must be an integer when provided"}')
+            return
+        if decision_id is not None and decision_id <= 0:
+            self._set_headers(HTTPStatus.BAD_REQUEST)
+            self.wfile.write(b'{"error": "decision_id must be > 0"}')
+            return
+
+        if decision_id is not None:
+            try:
+                from .blocking_decision_log import get_blocking_decision_log
+
+                if not get_blocking_decision_log().exists(decision_id):
+                    self._set_headers(HTTPStatus.BAD_REQUEST)
+                    self.wfile.write(
+                        b'{"error": "decision_id does not exist in blocking_decision_log"}'
+                    )
+                    return
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to validate decision_id %s: %s", decision_id, exc)
+                self._set_headers(HTTPStatus.INTERNAL_SERVER_ERROR)
+                self.wfile.write(b'{"error": "Failed to validate decision_id"}')
+                return
 
         comment = body.get("comment")
         extra = body.get("extra")
@@ -334,6 +389,54 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
         self._set_headers(HTTPStatus.CREATED)
         self.wfile.write(
             json.dumps({"status": "ok", "feedback_id": feedback_id}).encode("utf-8")
+        )
+
+    def _handle_get_blocking_feedback(self, params: Dict[str, str]) -> None:
+        """Return recent blocking feedback, optionally filtered by decision_id.
+
+        This endpoint is auth-gated and intended for admin/guardian debugging.
+        """
+        decision_id_param = (params.get("decision_id") or "").strip()
+        limit_param = (params.get("limit") or "").strip()
+
+        decision_id: Optional[int] = None
+        if decision_id_param:
+            if not decision_id_param.isdigit() or int(decision_id_param) <= 0:
+                self._set_headers(HTTPStatus.BAD_REQUEST)
+                self.wfile.write(b'{"error": "decision_id must be a positive integer"}')
+                return
+            decision_id = int(decision_id_param)
+
+        limit = 50
+        if limit_param:
+            if not limit_param.isdigit():
+                self._set_headers(HTTPStatus.BAD_REQUEST)
+                self.wfile.write(b'{"error": "limit must be a positive integer"}')
+                return
+            limit = max(1, min(int(limit_param), 200))
+
+        try:
+            from .blocking_feedback_log import get_blocking_feedback_log
+
+            rows = get_blocking_feedback_log().list_recent(
+                decision_id=decision_id,
+                limit=limit,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to fetch blocking feedback: %s", exc)
+            self._set_headers(HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.wfile.write(b'{"error": "Failed to fetch feedback"}')
+            return
+
+        self._set_headers(HTTPStatus.OK)
+        self.wfile.write(
+            json.dumps(
+                {
+                    "feedback": rows,
+                    "count": len(rows),
+                    "decision_id": decision_id,
+                }
+            ).encode("utf-8")
         )
 
     def _handle_health(self) -> None:
