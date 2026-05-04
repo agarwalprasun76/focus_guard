@@ -25,9 +25,21 @@ If `git push origin mvp-rc-2026-05-03` failed with **GH013 / Push cannot contain
 **Sync to GitHub after a history rewrite** (rewrites all SHAs; coordinate with anyone else using this remote):
 
 ```powershell
+git fetch origin
 git push --force-with-lease origin main
 git push --force origin mvp-rc-2026-05-03
 ```
+
+**If `main -> main (stale info)`:** `--force-with-lease` is comparing against your local `refs/remotes/origin/main`, which is often wrong or never refreshed after `git filter-repo`. Refresh it with `git fetch origin`, then retry. If it still fails, pin the lease to what GitHub actually has right now:
+
+```powershell
+git fetch origin
+$remoteMain = (git ls-remote origin refs/heads/main).Split("`t")[0]
+git push --force-with-lease="main:$remoteMain" origin main
+git push --force origin mvp-rc-2026-05-03
+```
+
+**Last resort** (you are sure nothing on `origin/main` should be kept): `git push --force origin main` — same end state as a successful lease against the current remote tip, but does not protect against someone else having pushed since your last `ls-remote`.
 
 ## Technical freeze criteria (declared met)
 
