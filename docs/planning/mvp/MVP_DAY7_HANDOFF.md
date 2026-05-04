@@ -11,7 +11,7 @@ Technical MVP freeze / release-candidate labeling per `MVP_DAY7_EXECUTION_PLAN.m
 ## Release candidate label
 
 - **RC identifier:** `mvp-rc-2026-05-03` (git tag + prior milestone commit message on an ancestor).
-- **Frozen snapshot (current `main`):** commit `80824db7174ae2dde7304bec9509faedb524daac` (short `80824db`) — includes **redaction** of accidentally committed OpenAI-shaped strings so GitHub push protection can accept the ref.
+- **Frozen snapshot (current `main` + tag):** same commit as `mvp-rc-2026-05-03` (run `git rev-parse mvp-rc-2026-05-03` for the full SHA). That tip includes **redaction** of accidentally committed OpenAI-shaped strings and a **history rewrite** (`git filter-repo --replace-text`) so GitHub push protection can accept the ref.
 - **Named `git` tag:** `mvp-rc-2026-05-03` → same commit as `main` above (updated after history rewrite).
 
 ### GitHub push protection (OpenAI key material)
