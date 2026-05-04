@@ -10,9 +10,24 @@ Technical MVP freeze / release-candidate labeling per `MVP_DAY7_EXECUTION_PLAN.m
 
 ## Release candidate label
 
-- **RC identifier:** `mvp-rc-2026-05-03` (commit message / milestone name).
-- **Frozen snapshot:** commit `b73d7c6873699c8abb2df83f744145db26fe1b8c` on branch `main` (short `b73d7c6`).
-- **Named `git` tag:** not present in the repo yet (`git tag` empty). Optional for discoverability: `git tag mvp-rc-2026-05-03 b73d7c6873699c8abb2df83f744145db26fe1b8c` then `git push origin mvp-rc-2026-05-03` if you use remote tags.
+- **RC identifier:** `mvp-rc-2026-05-03` (git tag + prior milestone commit message on an ancestor).
+- **Frozen snapshot (current `main`):** commit `80824db7174ae2dde7304bec9509faedb524daac` (short `80824db`) — includes **redaction** of accidentally committed OpenAI-shaped strings so GitHub push protection can accept the ref.
+- **Named `git` tag:** `mvp-rc-2026-05-03` → same commit as `main` above (updated after history rewrite).
+
+### GitHub push protection (OpenAI key material)
+
+If `git push origin mvp-rc-2026-05-03` failed with **GH013 / Push cannot contain secrets**, GitHub was scanning **reachable history** for OpenAI API key patterns (including old commits and commented-out lines).
+
+**What was done in-repo:** (1) Remove literals from the current tree (env-only / empty config). (2) Run `git filter-repo --replace-text` to replace the two leaked `sk-proj-…` blobs **across all commits**, then **force-move** the tag to `main`.
+
+**What you must do outside the repo:** If those strings were ever real keys, **revoke/rotate them in the OpenAI dashboard** immediately; treating them as compromised is the safe default.
+
+**Sync to GitHub after a history rewrite** (rewrites all SHAs; coordinate with anyone else using this remote):
+
+```powershell
+git push --force-with-lease origin main
+git push --force origin mvp-rc-2026-05-03
+```
 
 ## Technical freeze criteria (declared met)
 
@@ -57,5 +72,5 @@ Complete `MVP_SMOKE_TEST.md` later, or treat this waiver as satisfying the “re
 ## Next actions (owner)
 
 1. ~~Commit the RC snapshot~~ **Done** — see **Frozen snapshot** above.
-2. **Optional:** add a lightweight or annotated tag `mvp-rc-2026-05-03` on that commit if you want a named ref (not required if the commit message is enough for your workflow).
+2. **Push:** after the history scrub, use **force** pushes in the block under **GitHub push protection** (normal `git push` for the tag will keep failing until the remote accepts the new history).
 3. When ready, complete `docs/planning/mvp/MVP_SMOKE_TEST.md` and update this file or a short addendum with “manual smoke: pass / waivers.”
