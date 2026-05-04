@@ -51,7 +51,9 @@ class YouTubeClassifier(BaseDomainClassifier):
         # Try to add LLM-based classifiers if available
         try:
             from focus_guard.core.classification.classifiers.llm.openai_client import OpenAIClient
-            if 'OPENAI_API_KEY' in os.environ:
+            from focus_guard.core.program_data_paths import read_openai_api_key_from_api_token_file
+
+            if os.getenv("OPENAI_API_KEY") or read_openai_api_key_from_api_token_file():
                 logger.info("OpenAI API key found, creating LLM classifier")
                 llm_client = OpenAIClient()
                 llm_classifier = LLMBasedYouTubeClassifier(llm_client=llm_client)

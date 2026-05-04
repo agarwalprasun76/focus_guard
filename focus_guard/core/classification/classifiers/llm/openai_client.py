@@ -10,6 +10,8 @@ from typing import Optional, Dict, Any
 import openai
 from openai import OpenAI
 
+from focus_guard.core.program_data_paths import read_openai_api_key_from_api_token_file
+
 from .base_llm import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -34,18 +36,24 @@ class OpenAIClient(LLMClient):
         """Initialize the OpenAI client.
         
         Args:
-            api_key: OpenAI API key. If None, will use OPENAI_API_KEY env var.
+            api_key: OpenAI API key. If None, uses ``OPENAI_API_KEY`` if set, else
+                optional ``openai_api_key`` in ``%ProgramData%\\FocusGuard\\api_token.json``
+                (same file as the tab-server bearer token).
             model: The model to use (e.g., "gpt-5-nano").
             max_tokens: Maximum number of tokens to generate.
             temperature: Sampling temperature.
             client: Optional pre-configured client for testing.
             **kwargs: Additional arguments to pass to the OpenAI client.
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = (
+            api_key
+            or os.getenv("OPENAI_API_KEY")
+            or read_openai_api_key_from_api_token_file()
+        )
         if not self._validate_api_key(self.api_key):
             raise ValueError(
-                "OpenAI API key is required. Either pass it directly or set the "
-                "OPENAI_API_KEY environment variable."
+                "OpenAI API key is required. Pass it directly, set OPENAI_API_KEY, "
+                "or add openai_api_key to %ProgramData%\\FocusGuard\\api_token.json."
             )
         
         self.model = model

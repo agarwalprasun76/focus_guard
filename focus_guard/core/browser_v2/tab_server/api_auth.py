@@ -4,6 +4,10 @@ Generates and validates bearer tokens for mutation endpoints.
 The token is generated once at first run and persisted to a secure location.
 The browser extension reads this token at install time to authenticate requests.
 
+Optional JSON field ``openai_api_key`` may be stored in the same file so deployers
+can keep machine-local secrets in one ProgramData document; it is preserved when
+the bearer token is regenerated (see :meth:`APIAuthManager._generate_and_save`).
+
 Security model:
 - GET endpoints: No auth required (read-only, informational)
 - POST/DELETE endpoints: Require valid bearer token
@@ -84,6 +88,8 @@ class APIAuthManager:
 
     def _generate_and_save(self) -> None:
         """Generate a new random token and save to disk."""
+        from focus_guard.core.program_data_paths import read_openai_api_key_from_api_token_file
+
         self._token = secrets.token_hex(_TOKEN_BYTES)
         self._token_hash = hashlib.sha256(self._token.encode()).hexdigest()
         self._created_at = time.time()
@@ -96,6 +102,10 @@ class APIAuthManager:
             "description": "FocusGuard API authentication token. "
                            "The browser extension needs this token to make changes.",
         }
+        # Preserve optional LLM secret so token rotation does not wipe OpenAI config.
+        existing_openai = read_openai_api_key_from_api_token_file(self._token_path)
+        if existing_openai:
+            data["openai_api_key"] = existing_openai
 
         try:
             self._token_dir.mkdir(parents=True, exist_ok=True)

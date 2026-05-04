@@ -30,6 +30,17 @@ On first launch, the setup wizard appears.
 - Set admin password
 - Finish and optionally click **Open Guardian Dashboard**
 
+### OpenAI / LLM (optional)
+
+For OpenAI-backed classifiers, the runtime resolves the key in this order (first match wins):
+
+1. **`OPENAI_API_KEY`** environment variable (typical for development). If this is set to an old or revoked key, it **overrides** `api_token.json` — clear or update the env var when rotating keys.
+2. **`openai_api_key`** in `%ProgramData%\FocusGuard\api_token.json` — the **same** JSON file as the tab-server bearer token (`token`, `token_hash`, …), so both secrets can live in one ProgramData document. The alternate key name **`open_ai_api_key`** is also read if the canonical field is absent.
+
+Use **no leading or trailing spaces** inside `token` and `token_hash` (those values are not trimmed). The OpenAI value is trimmed when read.
+
+Add or edit the string field next to the existing token fields, then restart Focus Guard. Do not commit real keys to git. To confirm which credential is used, run `python scripts/verify_openai_key.py` (default order) or `python scripts/verify_openai_key.py --file-only` (ProgramData file only).
+
 ## 5) Verify core local endpoints
 - Tab server health: `http://127.0.0.1:58392/api/health`
 - Admin gateway: `http://127.0.0.1:58393/admin`
