@@ -67,6 +67,7 @@ Complete `MVP_SMOKE_TEST.md` later, or treat this waiver as satisfying the “re
 - **Reporting:** Email reporter and dashboard metrics baseline.
 - **Install / onboarding:** Windows install documentation and first-run wizard improvements.
 - **Release readiness:** `MVP_TEST_MATRIX.md`, `scripts/mvp_smoke.ps1`, `scripts/run_mvp_test_baseline.ps1`; manual checklist in `MVP_SMOKE_TEST.md`.
+- **Post–Day 7 sidetrack:** OpenAI key resolution from `%ProgramData%\FocusGuard\api_token.json` (`openai_api_key`, env override) and `scripts/verify_openai_key.py` (documented in `INSTALL_WINDOWS.md`).
 
 ## Deferred and parking lot
 
@@ -84,5 +85,6 @@ Complete `MVP_SMOKE_TEST.md` later, or treat this waiver as satisfying the “re
 ## Next actions (owner)
 
 1. ~~Commit the RC snapshot~~ **Done** — see **Frozen snapshot** above.
-2. **Push:** after the history scrub, use **force** pushes in the block under **GitHub push protection** (normal `git push` for the tag will keep failing until the remote accepts the new history).
+2. **Push:** history scrub + tag should already be on GitHub; if local `main` is **ahead** of `origin/main`, run `git fetch origin` then `git push --force-with-lease origin main`. Re-force the **`mvp-rc-2026-05-03`** tag if you want the RC label to match the latest `main` tip.
 3. When ready, complete `docs/planning/mvp/MVP_SMOKE_TEST.md` and update this file or a short addendum with “manual smoke: pass / waivers.”
+4. **Optional:** run `python scripts/admin_gateway_smoke.py --password …` and add a one-line result under **Deferred and parking lot**.

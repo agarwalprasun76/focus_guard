@@ -72,6 +72,7 @@ Primary files:
 - `docs/planning/mvp/MVP_TEST_MATRIX.md` (**index** of pytest / Vitest / Playwright / smoke helpers)
 - `scripts/mvp_smoke.ps1` (HTTP smoke: tab + admin)
 - `scripts/run_mvp_test_baseline.ps1` (Tier A pytest + smoke in one run)
+- `scripts/verify_openai_key.py` (optional: confirm OpenAI credential; supports `--file-only`)
 
 ## 10-Day Sequence
 1. Reliability baseline (override flow stable)
@@ -96,9 +97,9 @@ Calendar-style **Day 1–5** execution docs absorbed most of items **1–8** abo
 | 7 Install + docs | Done | `INSTALL_WINDOWS.md`, README, packaging script paths |
 | 8 First-run wizard | Done | Guardian dashboard handoff in wizard |
 | **9 Smoke + blocker burn** | **Automated slice done (Day 6)** | Baseline + matrix: `run_mvp_test_baseline.ps1`, `MVP_TEST_MATRIX.md`, `MVP_DAY6_HANDOFF.md`. **Manual** `MVP_SMOKE_TEST.md` recommended for full sign-off; **may be deferred** — see `MVP_DAY6_EXECUTION_PLAN.md` § Deferring manual smoke. |
-| 10 MVP freeze + handoff | **Done** | **Technical freeze** in `MVP_DAY7_HANDOFF.md`; RC snapshot committed on `main` (`mvp-rc-2026-05-03` message). Optional named `git` tag still available. Manual smoke deferred with waiver. |
+| 10 MVP freeze + handoff | **Done (engineering)** | **Technical freeze** in `MVP_DAY7_HANDOFF.md`. Git tag **`mvp-rc-2026-05-03`** published on GitHub (tracks `main` through history scrub + post-freeze fixes). **Post–Day 7 sidetrack:** OpenAI key can resolve from `%ProgramData%\FocusGuard\api_token.json` (`openai_api_key`) with `OPENAI_API_KEY` override — see `INSTALL_WINDOWS.md`, `scripts/verify_openai_key.py`. **Still optional:** `admin_gateway_smoke.py`; **strict DoD:** run `MVP_SMOKE_TEST.md` (or extend waiver in handoff). |
 
-**Sprint closure (Day 7):** `MVP_DAY7_HANDOFF.md` — RC snapshot committed on `main`; optional `git tag mvp-rc-2026-05-03` on that commit. Manual `MVP_SMOKE_TEST.md` can still run anytime — see `MVP_DAY6_EXECUTION_PLAN.md` § Deferring manual smoke. **Next:** post-MVP backlog in `FEATURE_REQUESTS_PARKING_LOT.md`.
+**Sprint closure (Day 7):** `MVP_DAY7_HANDOFF.md` + **`MVP_DAY7_EXECUTION_PLAN.md` § Resume after sidetrack** — engineering RC is closed; use the resume section for any last optional gates. Manual `MVP_SMOKE_TEST.md` can still run anytime — see `MVP_DAY6_EXECUTION_PLAN.md` § Deferring manual smoke. **Product next:** post-MVP backlog in `FEATURE_REQUESTS_PARKING_LOT.md`.
 
 ## Definition of Done
 - Critical tab_server tests green
