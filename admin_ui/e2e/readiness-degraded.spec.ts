@@ -121,9 +121,9 @@ test.describe("I1 readiness degraded states", () => {
     await page.getByLabel("Admin Password").fill("secret123");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await expect(page.getByText(/Gateway is online but tab server is offline/i)).toBeVisible();
-    await expect(page.getByText("Gateway: online")).toBeVisible();
-    await expect(page.getByText("Tab server: offline")).toBeVisible();
-    await expect(page.getByText("Enforcement: degraded")).toBeVisible();
+    // Dashboard.tsx: OfflineState when meta.readiness.tab_server === "offline"
+    await expect(
+      page.getByText("Tab server is offline. Data may be stale.", { exact: true })
+    ).toBeVisible();
   });
 });

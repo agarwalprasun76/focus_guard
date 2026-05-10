@@ -38,3 +38,6 @@ Ship a guided setup-validation experience and tighten the browser-extension onbo
 
 ## Exit criteria
 Day 8 is done when setup completion includes a real readiness gate and extension-store onboarding is clear enough for a first-time operator without ad-hoc support.
+
+## Follow-on (Day 8 Part B)
+Enforcement-mode and blocking-path hardening (advisory vs enforcing consistency, single source of truth, traceability) is tracked in `docs/planning/mvp/Day_8_partb.Execution_plan.md`.

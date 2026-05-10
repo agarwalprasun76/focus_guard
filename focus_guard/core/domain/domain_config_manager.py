@@ -254,16 +254,26 @@ def _use_localappdata_marker_path() -> Path:
 
 
 def _windows_domain_file_user_can_modify(path: Path) -> bool:
-    """Approximate writable check without mutating JSON content."""
+    """True if this account can persist config the same way :meth:`_save` does.
+
+    Opening an existing JSON with ``r+b`` is not sufficient: saves use a new
+    sibling ``*.tmp`` plus ``os.replace``. Some ProgramData ACLs allow read/write
+    on the existing file but deny **creating** new files in the folder, which
+    yields WinError 5 on ``domain_config.tmp``.
+    """
+    parent = path.parent
     try:
+        parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            probe = path.parent / "__fg_domain_write_probe.tmp"
+            probe = parent / "__fg_domain_write_probe.tmp"
             probe.write_text("", encoding="utf-8")
             probe.unlink()
             return True
         with open(path, "r+b"):
             pass
+        probe = parent / f"__fg_atomic_write_probe_{os.getpid()}.tmp"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
         return True
     except OSError:
         return False

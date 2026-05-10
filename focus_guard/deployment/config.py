@@ -227,6 +227,9 @@ class DeploymentConfig:
     # Security
     require_admin_to_stop: bool = True
     config_password_hash: str = ""  # SHA256 hash of config password
+
+    # First-run / settings wizard: remember optional UI choices
+    wizard_extension_acknowledged: bool = False  # "I installed … extension" checkbox
     
     def __post_init__(self):
         """Set defaults after initialization."""
@@ -304,7 +307,8 @@ class DeploymentConfig:
                 run_as_service=data.get('run_as_service', True),
                 hide_from_user=data.get('hide_from_user', False),
                 require_admin_to_stop=data.get('require_admin_to_stop', True),
-                config_password_hash=data.get('config_password_hash', '')
+                config_password_hash=data.get('config_password_hash', ''),
+                wizard_extension_acknowledged=data.get('wizard_extension_acknowledged', False),
             )
         except Exception as e:
             print(f"Error loading config: {e}")
@@ -341,7 +345,8 @@ class DeploymentConfig:
                 'run_as_service': self.run_as_service,
                 'hide_from_user': self.hide_from_user,
                 'require_admin_to_stop': self.require_admin_to_stop,
-                'config_password_hash': self.config_password_hash
+                'config_password_hash': self.config_password_hash,
+                'wizard_extension_acknowledged': self.wizard_extension_acknowledged,
             }
             
             with open(config_path, 'w', encoding='utf-8') as f:

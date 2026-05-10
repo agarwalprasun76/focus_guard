@@ -10,6 +10,11 @@ Usage:
     python scripts/run_all_tests.py --quick   # Skip slow/integration tests
     python scripts/run_all_tests.py --backend # Backend only
     python scripts/run_all_tests.py --frontend # Frontend only
+
+Pre-ship backend gate (pytest only; also runs in full non-quick backend plan):
+    python scripts/run_release_integration_tests.py
+
+Note: ``run_release_integration_tests.py`` does **not** run Playwright. Failures in "Frontend: E2E" are from ``admin_ui`` (`npm run test:e2e`), not from that script.
 """
 
 from __future__ import annotations
@@ -116,6 +121,13 @@ def build_plan(quick: bool = False, backend: bool = False, frontend: bool = Fals
                 "name": "Backend: Browser V2 Unit Tests",
                 "cmd": [sys.executable, "-m", "pytest",
                         "focus_guard/tests/browser_v2/unit/", "-q", "--tb=short"],
+                "cwd": str(PROJECT_ROOT),
+            })
+
+            # 4b. Pre-ship tab-server / enforcement integration gate (expand in Day 8 Part B)
+            plan.suites.append({
+                "name": "Backend: Release integration gate (tab server / enforcement)",
+                "cmd": [sys.executable, "scripts/run_release_integration_tests.py"],
                 "cwd": str(PROJECT_ROOT),
             })
 

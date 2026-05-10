@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectDashboardHeroVisible } from "./helpers";
+
 test.describe("P4-06 performance sanity", () => {
   test("login and dashboard render latency snapshot", async ({ page }) => {
     await page.route("**/admin/api/v1/**", async (route) => {
@@ -105,7 +107,7 @@ test.describe("P4-06 performance sanity", () => {
 
     const submitStart = Date.now();
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expectDashboardHeroVisible(page);
     const dashboardVisibleMs = Date.now() - submitStart;
 
     // Sanity thresholds for local/dev environment.

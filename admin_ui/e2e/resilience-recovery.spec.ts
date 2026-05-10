@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectDashboardHeroVisible } from "./helpers";
+
 test.describe("I3 resilience recovery", () => {
   test("keeps stale dashboard snapshot during transient failure and recovers without reload", async ({ page }) => {
     let dashboardCallCount = 0;
@@ -147,14 +149,14 @@ test.describe("I3 resilience recovery", () => {
     await page.getByLabel("Admin Password").fill("secret123");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-    await expect(page.getByText("Focus Score")).toBeVisible();
+    await expectDashboardHeroVisible(page);
+    await expect(page.getByText("Excellent focus today!")).toBeVisible();
 
-    await expect(page.getByText(/Showing last known dashboard snapshot/i)).toBeVisible();
+    await expect(page.getByText(/Showing last known snapshot while runtime recovers/i)).toBeVisible();
 
     recoveryEnabled = true;
 
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-    await expect(page.getByText(/Showing last known dashboard snapshot/i)).not.toBeVisible();
+    await expectDashboardHeroVisible(page);
+    await expect(page.getByText(/Showing last known snapshot while runtime recovers/i)).not.toBeVisible();
   });
 });

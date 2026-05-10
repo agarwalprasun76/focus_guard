@@ -947,45 +947,8 @@ def _open_settings_dialog(tray) -> None:
     try:
         from focus_guard.gui.first_run_wizard import FirstRunWizard
         icon = tray.icon() if tray else _load_icon()
-        wizard = FirstRunWizard(icon=icon)
+        wizard = FirstRunWizard(icon=icon, settings_mode=True)
         wizard.setWindowTitle("Focus Guard Settings")
-        wizard.setButtonText(wizard.FinishButton, "Save Settings")
-
-        # Pre-fill from existing config
-        try:
-            from focus_guard.deployment.config import DeploymentConfig
-            cfg = DeploymentConfig.load()
-            ep = wizard.email_page
-            ep.enable_email.setChecked(cfg.email.enabled)
-            ep.smtp_server.setText(cfg.email.smtp_server)
-            ep.smtp_port.setValue(cfg.email.smtp_port)
-            ep.smtp_user.setText(cfg.email.smtp_username)
-            ep.smtp_pass.setText(cfg.email.smtp_password)
-            ep.recipients.setText(", ".join(cfg.email.recipients))
-            wizard.finish_page.autostart_cb.setChecked(cfg.run_at_startup)
-            # Pre-fill enforcement mode
-            mode_index = {"enforcing": 0, "advisory": 1, "tracking": 2}.get(
-                cfg.enforcement_mode, 0
-            )
-            wizard.finish_page.enforcement_mode.setCurrentIndex(mode_index)
-            # Pre-fill personalization
-            pp = wizard.personalization_page
-            pp.display_name.setText(cfg.popup.user_display_name)
-            tone_index = {"encouraging": 0, "firm": 1, "playful": 2}.get(
-                cfg.popup.tone, 0
-            )
-            pp.tone.setCurrentIndex(tone_index)
-            pp.show_streak.setChecked(cfg.popup.show_streak)
-            pp.show_focus_score.setChecked(cfg.popup.show_focus_score)
-            pp.show_motivational.setChecked(cfg.popup.show_motivational_message)
-            # Pre-fill password page
-            if cfg.config_password_hash:
-                wizard.password_page.enable_password.setChecked(True)
-                # Don't pre-fill the actual password — user must re-enter to change
-            else:
-                wizard.password_page.enable_password.setChecked(False)
-        except Exception:
-            pass
 
         if wizard.exec_():
             config = wizard.get_config()

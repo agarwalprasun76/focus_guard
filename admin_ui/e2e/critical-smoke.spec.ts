@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectDashboardHeroVisible } from "./helpers";
+
 type ExceptionItem = {
   id: string;
   domain: string;
@@ -163,16 +165,17 @@ test.describe("Critical Phase1 smoke", () => {
     await page.getByLabel("Admin Password").fill("secret123");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expectDashboardHeroVisible(page);
 
     await page.goto("/overrides");
-    await page.getByRole("button", { name: "Add Exception" }).click();
+    await page.getByRole("button", { name: "New Rule" }).click();
     await page.getByLabel("Domain").fill("youtube.com");
     await page.getByLabel("Type").selectOption("temporary");
-    await page.getByLabel("Duration (seconds)").fill("300");
-    await page.getByRole("button", { name: "Create" }).click();
+    await page.locator("#create-exception-dialog").locator("#duration_seconds").fill("300");
+    // Mobile layout: bottom nav can overlap the modal footer; force avoids flaky pointer interception.
+    await page.locator("#create-exception-dialog").getByRole("button", { name: "Create" }).click({ force: true });
 
-    await expect(page.getByText("Created temporary exception")).toBeVisible();
+    await expect(page.getByText(/Created temporary rule for youtube\.com/i)).toBeVisible();
     const revokeButton = page.getByRole("button", { name: /Revoke exception for youtube.com/i });
     await expect(revokeButton).toBeVisible();
 

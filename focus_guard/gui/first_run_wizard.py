@@ -7,7 +7,9 @@ Saves a DeploymentConfig at the end.
 """
 
 import logging
+import os
 import socket
+import subprocess
 import sys
 import webbrowser
 from pathlib import Path
@@ -107,6 +109,14 @@ class WelcomePage(QWizardPage):
         )
         layout.addWidget(intro)
 
+        layout.addWidget(_body(
+            "How this install works: you already started Focus Guard from the main app entry point. "
+            "This wizard collects your settings first (no background services yet). "
+            "When you click <b>Start Focus Guard</b> on the last page, the tray and services "
+            "come up next; shortly after that, a short <i>Finish setup</i> window helps you "
+            "open the guardian dashboard and verify connections. "
+            "Later, use Settings from the tray—not a separate setup launcher—to change choices."
+        ))
         layout.addWidget(_separator())
 
         # Features section
@@ -1016,8 +1026,15 @@ class PasswordPage(QWizardPage):
         self.confirm_password.textChanged.connect(self._validate_passwords)
         pw_layout.addRow("Confirm:", self.confirm_password)
 
+        self.show_passwords_cb = QCheckBox("Show passwords")
+        self.show_passwords_cb.setToolTip("Temporarily show what you typed (look away if someone is watching).")
+        self.show_passwords_cb.toggled.connect(self._toggle_show_passwords)
+        pw_layout.addRow("", self.show_passwords_cb)
+
         self.password_group.setLayout(pw_layout)
         layout.addWidget(self.password_group)
+
+        self._existing_password_hash: str = ""
 
         # --- Validation feedback ---
         self.validation_label = QLabel("")
@@ -1037,6 +1054,15 @@ class PasswordPage(QWizardPage):
 
         self.setLayout(layout)
 
+    def set_existing_password_hash(self, password_hash: str) -> None:
+        """When re-opening the wizard, avoid forcing a password reset if fields stay empty."""
+        self._existing_password_hash = (password_hash or "").strip()
+
+    def _toggle_show_passwords(self, visible: bool) -> None:
+        mode = QLineEdit.Normal if visible else QLineEdit.Password
+        self.password.setEchoMode(mode)
+        self.confirm_password.setEchoMode(mode)
+
     def _toggle_fields(self, enabled: bool):
         self.password_group.setEnabled(enabled)
         if not enabled:
@@ -1052,6 +1078,16 @@ class PasswordPage(QWizardPage):
 
         pw = self.password.text()
         cpw = self.confirm_password.text()
+
+        if (
+            self._existing_password_hash
+            and not pw.strip()
+            and not cpw.strip()
+        ):
+            self.validation_label.setText("Keeping existing admin password — enter below only if you want to replace it.")
+            self.validation_label.setStyleSheet("color: #666; font-size: 11px;")
+            self.completeChanged.emit()
+            return
 
         if not pw:
             self.validation_label.setText("")
@@ -1073,16 +1109,23 @@ class PasswordPage(QWizardPage):
         """Only allow Next if password is valid (or disabled)."""
         if not self.enable_password.isChecked():
             return True
-        pw = self.password.text()
-        cpw = self.confirm_password.text()
+        pw = self.password.text().strip()
+        cpw = self.confirm_password.text().strip()
+        if self._existing_password_hash and not pw and not cpw:
+            return True
         return len(pw) >= 4 and pw == cpw
 
     def get_password_hash(self) -> str:
-        """Return the SHA-256 hash of the password, or empty string if disabled."""
+        """Return SHA-256 hash; preserve prior hash when user leaves fields blank."""
         if not self.enable_password.isChecked():
             return ""
         import hashlib
-        return hashlib.sha256(self.password.text().encode()).hexdigest()
+
+        pw = self.password.text().strip()
+        cpw = self.confirm_password.text().strip()
+        if self._existing_password_hash and not pw and not cpw:
+            return self._existing_password_hash
+        return hashlib.sha256(pw.encode()).hexdigest()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1090,36 +1133,56 @@ class PasswordPage(QWizardPage):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class FinishPage(QWizardPage):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, standalone_setup_only: bool = False):
         super().__init__(parent)
         self.setTitle("You're All Set!")
         self.setSubTitle("Focus Guard is ready to go.")
 
         layout = QVBoxLayout()
 
-        layout.addWidget(_body(
-            "Here's what will happen next:\n\n"
-            "  • Focus Guard will run in the system tray\n"
-            "  • The tab server will monitor browser activity\n"
-            "  • Activity reports will be sent per your schedule\n"
-            "  • Distracting sites will be blocked based on your rules\n\n"
-            "You can always change settings by right-clicking the tray icon."
-        ))
+        if standalone_setup_only:
+            layout.addWidget(_body(
+                "• Use Save setup anytime to save to disk without leaving this wizard.\n"
+                '• Save & launch Focus Guard saves and tries to start the full app (same as '
+                "running python -m focus_guard.main from your project folder).\n\n"
+                "If launch fails, open a terminal there and run that command manually."
+            ))
+        else:
+            layout.addWidget(_body(
+                "Here's what will happen next:\n\n"
+                "  • Focus Guard will run in the system tray\n"
+                "  • The tab server will monitor browser activity\n"
+                "  • Activity reports will be sent per your schedule\n"
+                "  • Distracting sites will be blocked based on your rules\n\n"
+                "On this page, use Save setup anytime to persist without starting services yet "
+                '(then click Start Focus Guard).\nYou can change settings later from the tray icon.'
+            ))
 
         layout.addWidget(_separator())
 
         dash_url = admin_dashboard_http_url()
-        finish_group = QGroupBox("After you click Start Focus Guard")
-        finish_hint = QVBoxLayout()
-        finish_hint.addWidget(
-            _body(
+        if standalone_setup_only:
+            finish_title = "When you launch the full app"
+            finish_body = (
+                "Run  python -m focus_guard.main  as described above.\n\n"
+                "The guardian dashboard is not reachable until that process has started. "
+                "About two seconds after the tray icon appears, a \"Finish setup\" window opens "
+                "— use Open Guardian Dashboard and Run connection check there.\n\n"
+                f"Dashboard URL (bookmark after it loads): {dash_url}"
+            )
+        else:
+            finish_title = "After you click Start Focus Guard"
+            finish_body = (
                 "The guardian dashboard is not reachable from this wizard because local services "
                 "have not finished starting yet.\n\n"
                 'About two seconds after the tray icon appears, a small "Finish setup" window opens. '
                 "Use Open Guardian Dashboard and Run connection check there—not from this screen.\n\n"
                 f"Dashboard URL (bookmark after it loads): {dash_url}"
             )
-        )
+
+        finish_group = QGroupBox(finish_title)
+        finish_hint = QVBoxLayout()
+        finish_hint.addWidget(_body(finish_body))
         finish_group.setLayout(finish_hint)
         layout.addWidget(finish_group)
 
@@ -1171,9 +1234,25 @@ class FinishPage(QWizardPage):
 class FirstRunWizard(QWizard):
     """Multi-page first-run setup wizard."""
 
-    def __init__(self, icon: Optional[QIcon] = None, parent=None):
+    def __init__(
+        self,
+        icon: Optional[QIcon] = None,
+        parent=None,
+        *,
+        standalone_setup_only: bool = False,
+        settings_mode: bool = False,
+    ):
         super().__init__(parent)
+        if standalone_setup_only and settings_mode:
+            raise ValueError("standalone_setup_only and settings_mode are mutually exclusive")
+        self._standalone_setup_only = standalone_setup_only
+        self._settings_mode = settings_mode
         self.setWindowTitle("Focus Guard Setup")
+
+        self.setOption(QWizard.HaveCustomButton1, True)
+        self.setButtonText(QWizard.CustomButton1, "Save setup")
+        self.customButtonClicked.connect(self._on_custom_dialog_button)
+        self.currentIdChanged.connect(self._sync_wizard_buttons)
         self.setWizardStyle(QWizard.ModernStyle)
         self.setMinimumSize(800, 600)
 
@@ -1188,7 +1267,7 @@ class FirstRunWizard(QWizard):
         self.personalization_page = PersonalizationPage()
         self.domain_manager_page = DomainManagerPage()
         self.password_page = PasswordPage()
-        self.finish_page = FinishPage()
+        self.finish_page = FinishPage(standalone_setup_only=standalone_setup_only)
 
         self.addPage(self.welcome_page)
         self.addPage(self.email_page)
@@ -1199,7 +1278,153 @@ class FirstRunWizard(QWizard):
         self.addPage(self.password_page)
         self.addPage(self.finish_page)
 
-        self.setButtonText(QWizard.FinishButton, "Start Focus Guard")
+        from focus_guard.deployment.config import DeploymentConfig
+
+        if DeploymentConfig.get_config_path().exists():
+            self.apply_saved_deployment_config()
+
+        self._sync_wizard_buttons()
+
+    def _sync_wizard_buttons(self, _page_id: int = None) -> None:
+        btn_custom = self.button(QWizard.CustomButton1)
+        on_finish = self.currentPage() is self.finish_page
+        btn_custom.setVisible(on_finish)
+        if not on_finish:
+            return
+        if self._settings_mode:
+            self.setButtonText(QWizard.FinishButton, "Save Settings")
+        elif self._standalone_setup_only:
+            self.setButtonText(QWizard.FinishButton, "Save & launch Focus Guard")
+        else:
+            self.setButtonText(QWizard.FinishButton, "Start Focus Guard")
+
+    def _on_custom_dialog_button(self, which: int) -> None:
+        if which != QWizard.CustomButton1:
+            return
+        if self.save_setup_to_disk():
+            if self._settings_mode:
+                msg = (
+                    "Settings saved.\nUse Save Settings when finished, or Save setup again anytime."
+                )
+            elif self._standalone_setup_only:
+                msg = (
+                    "Setup saved.\nContinue editing here if needed, "
+                    'then choose Save & launch Focus Guard—or run python -m focus_guard.main.'
+                )
+            else:
+                msg = (
+                    "Setup saved.\nContinue editing if needed, then click Start Focus Guard when "
+                    "you are ready for the tray and services."
+                )
+            QMessageBox.information(self, "Focus Guard", msg)
+
+    def save_setup_to_disk(self) -> bool:
+        """Write current wizard state to deployment + domain configs without completing the wizard."""
+        try:
+            config = self.get_config()
+            config.save()
+            logger.info(
+                "Setup saved without finishing wizard (%s)",
+                config.get_config_path(),
+            )
+            return True
+        except Exception as e:
+            logger.exception("Could not save setup: %s", e)
+            QMessageBox.warning(self, "Focus Guard", f"Could not save setup:\n{e}")
+            return False
+
+    def apply_saved_deployment_config(self) -> bool:
+        """Populate wizard fields when deployment_config.json already exists (reuse during testing/settings)."""
+
+        from focus_guard.deployment.config import DeploymentConfig
+
+        cfg_path = DeploymentConfig.get_config_path()
+        if not cfg_path.exists():
+            return False
+        try:
+            cfg = DeploymentConfig.load()
+        except Exception as exc:
+            logger.warning("Could not prefill wizard from saved config: %s", exc)
+            return False
+
+        ep = self.email_page
+        ep.enable_email.setChecked(cfg.email.enabled)
+        ep.smtp_server.setText(cfg.email.smtp_server)
+        ep.smtp_port.setValue(cfg.email.smtp_port)
+        ep.smtp_user.setText(cfg.email.smtp_username)
+        ep.smtp_pass.setText(cfg.email.smtp_password)
+        ep.recipients.setText(", ".join(cfg.email.recipients))
+
+        interval = cfg.reporting.schedule.get_hourly_interval_minutes()
+        combo_intervals = [5, 60, 120, 240, 1440]
+        best_i = min(
+            range(len(combo_intervals)),
+            key=lambda i: abs(combo_intervals[i] - interval),
+        )
+        ep.frequency.setCurrentIndex(best_i)
+
+        fp = self.finish_page
+        fp.autostart_cb.setChecked(cfg.run_at_startup)
+        mode_index = {"enforcing": 0, "advisory": 1, "tracking": 2}.get(
+            cfg.enforcement_mode, 0
+        )
+        fp.enforcement_mode.setCurrentIndex(mode_index)
+
+        pp = self.personalization_page
+        pp.display_name.setText(cfg.popup.user_display_name)
+        tone_index = {"encouraging": 0, "firm": 1, "playful": 2}.get(cfg.popup.tone, 0)
+        pp.tone.setCurrentIndex(tone_index)
+        pp.show_streak.setChecked(cfg.popup.show_streak)
+        pp.show_focus_score.setChecked(cfg.popup.show_focus_score)
+        pp.show_motivational.setChecked(cfg.popup.show_motivational_message)
+
+        self.extension_page.extension_installed_cb.setChecked(
+            getattr(cfg, "wizard_extension_acknowledged", False),
+        )
+
+        if cfg.config_password_hash:
+            self.password_page.enable_password.setChecked(True)
+            self.password_page.set_existing_password_hash(cfg.config_password_hash)
+        else:
+            self.password_page.enable_password.setChecked(False)
+            self.password_page.set_existing_password_hash("")
+
+        try:
+            from focus_guard.core.domain.domain_config_manager import get_domain_config_manager
+
+            mgr = get_domain_config_manager()
+            mb = mgr.get_master_budget()
+            tlp = self.time_limits_page
+            tlp.master_budget.setValue(
+                max(5, int(mb.get("max_total_distraction_seconds", 2700)) // 60)
+            )
+            cat_budgets = mgr.get_classification_budgets()
+
+            def fill_cat(key: str, spin_widget, fallback_minutes: int) -> None:
+                rule = cat_budgets.get(key, {}) or {}
+                secs = int(
+                    rule.get("max_cumulative_time_seconds", fallback_minutes * 60)
+                    or (fallback_minutes * 60)
+                )
+                spin_widget.setValue(max(0, secs // 60))
+
+            fill_cat("ENTERTAINMENT:DISTRACTION", tlp.entertainment_budget, 30)
+            fill_cat("SOCIAL_MEDIA:DISTRACTION", tlp.social_media_budget, 20)
+            fill_cat("GAMING:DISTRACTION", tlp.gaming_budget, 15)
+
+            ov_src = (
+                cat_budgets.get("ENTERTAINMENT:DISTRACTION")
+                or cat_budgets.get("SOCIAL_MEDIA:DISTRACTION")
+                or {}
+            )
+            tlp.max_overrides.setValue(int(ov_src.get("max_overrides_per_day", 3) or 3))
+            od_sec = int(ov_src.get("max_override_duration_seconds", 300) or 300)
+            tlp.override_duration.setValue(max(1, od_sec // 60))
+        except Exception as exc:
+            logger.warning("Could not prefill time-limit fields from domain config: %s", exc)
+
+        self.password_page._validate_passwords()
+        return True
 
     def get_config(self):
         """Build a DeploymentConfig from the wizard fields."""
@@ -1212,6 +1437,20 @@ class FirstRunWizard(QWizard):
             StorageConfig,
             MonitoringConfig,
         )
+
+        try:
+            prev = DeploymentConfig.load()
+            persist_tab_host = prev.tab_server_host
+            persist_tab_port = prev.tab_server_port
+            persist_run_as_service = prev.run_as_service
+            persist_hide = prev.hide_from_user
+            persist_require_admin = prev.require_admin_to_stop
+        except Exception:
+            persist_tab_host = "127.0.0.1"
+            persist_tab_port = 58392
+            persist_run_as_service = True
+            persist_hide = False
+            persist_require_admin = True
 
         # Email
         email_enabled = self.email_page.enable_email.isChecked()
@@ -1281,8 +1520,14 @@ class FirstRunWizard(QWizard):
             monitoring=MonitoringConfig(),
             popup=popup,
             enforcement_mode=enforcement_mode,
+            tab_server_host=persist_tab_host,
+            tab_server_port=persist_tab_port,
             run_at_startup=self.finish_page.autostart_cb.isChecked(),
+            run_as_service=persist_run_as_service,
+            hide_from_user=persist_hide,
+            require_admin_to_stop=persist_require_admin,
             config_password_hash=password_hash,
+            wizard_extension_acknowledged=self.extension_page.extension_installed_cb.isChecked(),
         )
 
         # Save time limits and budgets to DomainConfigManager
@@ -1338,15 +1583,34 @@ class FirstRunWizard(QWizard):
         return config
 
 
+def launch_focus_guard_main_detached() -> None:
+    """Start ``python -m focus_guard.main`` with cwd at the checkout root (development)."""
+    repo_root = Path(__file__).resolve().parents[2]
+    cmd = [sys.executable, "-m", "focus_guard.main"]
+    if os.name == "nt" and hasattr(subprocess, "DETACHED_PROCESS"):
+        subprocess.Popen(cmd, cwd=str(repo_root), creationflags=subprocess.DETACHED_PROCESS)
+    else:
+        subprocess.Popen(cmd, cwd=str(repo_root))
+
+
 def is_first_run() -> bool:
     """Return True if no deployment config exists yet."""
     from focus_guard.deployment.config import DeploymentConfig
     return not DeploymentConfig.get_config_path().exists()
 
 
-def run_first_run_wizard(icon: Optional[QIcon] = None) -> Optional[object]:
-    """Show the wizard and return the saved DeploymentConfig, or None if cancelled."""
-    wizard = FirstRunWizard(icon=icon)
+def run_first_run_wizard(
+    icon: Optional[QIcon] = None,
+    *,
+    standalone_setup_only: bool = False,
+) -> Optional[object]:
+    """Show the wizard and return the saved DeploymentConfig, or None if cancelled.
+
+    If *standalone_setup_only* is True (wizard run via ``first_run_wizard.py``), finishing
+    with **Save & launch Focus Guard** also attempts to start ``python -m focus_guard.main``.
+    Users can tap **Save setup** anytime to persist JSON without leaving the wizard.
+    """
+    wizard = FirstRunWizard(icon=icon, standalone_setup_only=standalone_setup_only)
     result = wizard.exec_()
 
     if result == QWizard.Accepted:
@@ -1361,6 +1625,19 @@ def run_first_run_wizard(icon: Optional[QIcon] = None) -> Optional[object]:
                 "Focus Guard",
                 f"Could not save configuration:\n{e}\n\nDefault settings will be used.",
             )
+        else:
+            if standalone_setup_only:
+                try:
+                    launch_focus_guard_main_detached()
+                except OSError as e:
+                    logger.exception("Could not spawn focus_guard.main: %s", e)
+                    QMessageBox.warning(
+                        None,
+                        "Focus Guard",
+                        "Could not start Focus Guard automatically.\n\n"
+                        "Open a terminal in your project folder and run:\n"
+                        "    python -m focus_guard.main",
+                    )
         return config
 
     logger.info("First-run wizard cancelled — using defaults")
@@ -1369,7 +1646,6 @@ def run_first_run_wizard(icon: Optional[QIcon] = None) -> Optional[object]:
 
 if __name__ == "__main__":
     # Supports: `python focus_guard/gui/first_run_wizard.py` from repo root.
-    # The wizard is normally shown from `python -m focus_guard.main` on first run.
     import sys
     from pathlib import Path
 
@@ -1382,5 +1658,5 @@ if __name__ == "__main__":
     from PyQt5.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
-    config = run_first_run_wizard()
+    config = run_first_run_wizard(standalone_setup_only=True)
     raise SystemExit(0 if config is not None else 1)

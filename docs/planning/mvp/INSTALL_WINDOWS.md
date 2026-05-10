@@ -21,9 +21,10 @@ pip install -r requirements.txt
 python -m focus_guard.main
 ```
 
-On first launch, the setup wizard appears. After you click **Start Focus Guard**, the tray icon starts everything (tab server, admin gateway, etc.). Within a couple of seconds you should see a **Finish setup** window to open the Guardian Dashboard and **Run connection check** once services respond.
+**Recommended flow:** always use the command above—there is no separate installer that asks “run setup?” first. Same process: **configure in the wizard (only when no deployment config exists yet)** → core services and tray **start after you click Finish** → **Finish setup** dialog opens (~2 seconds later) to open the guardian dashboard and run the connection check. **Later runs:** no wizard; reopen **Settings…** from the tray to edit anything.
 
 ## 4) Complete first-run wizard
+- While `deployment_config.json` exists (after a prior run), reopening the wizard or **Settings…** from the tray reloads your saved email, reporting interval, enforcement mode, personalization, time-budget fields, extension-install checkbox, and admin-password state (leave password fields empty to keep the current password).
 - Configure email reports (optional but recommended)
 - Install browser extension from store links
   - Edge store ID: `legaalcjhhgofgpgbbpoadafdjllckgg`
