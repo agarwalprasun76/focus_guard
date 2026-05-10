@@ -19,6 +19,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import threading
 import time
 from dataclasses import dataclass, field, asdict
@@ -231,11 +232,126 @@ CATEGORY_TO_ENUM: Dict[str, str] = {
 }
 
 
-def _default_config_path() -> Path:
-    """Return the default path for the unified domain config."""
-    if os.name == "nt":
-        return Path(r"C:\ProgramData\FocusGuard\domain_config.json")
+def _posix_domain_config_default() -> Path:
     return Path.home() / ".focus_guard" / "domain_config.json"
+
+
+def _programdata_domain_config_path() -> Path:
+    return Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "FocusGuard" / "domain_config.json"
+
+
+def _localappdata_domain_config_path() -> Path:
+    base = os.environ.get("LOCALAPPDATA", "").strip()
+    if base:
+        return Path(base) / "FocusGuard" / "domain_config.json"
+    return Path.home() / "AppData" / "Local" / "FocusGuard" / "domain_config.json"
+
+
+def _use_localappdata_marker_path() -> Path:
+    """When present, newer runs always use LOCALAPPDATA domain_config.json."""
+
+    return _localappdata_domain_config_path().parent / ".domain_config_use_localappdata"
+
+
+def _windows_domain_file_user_can_modify(path: Path) -> bool:
+    """Approximate writable check without mutating JSON content."""
+    try:
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            probe = path.parent / "__fg_domain_write_probe.tmp"
+            probe.write_text("", encoding="utf-8")
+            probe.unlink()
+            return True
+        with open(path, "r+b"):
+            pass
+        return True
+    except OSError:
+        return False
+
+
+def _copy_domain_config_fallback(src: Path, dst: Path) -> None:
+    try:
+        shutil.copyfile(src, dst)
+        return
+    except OSError:
+        pass
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _default_config_path() -> Path:
+    """Return writable domain_config.json path.
+
+    Prefer ProgramData for shared installs when ACL allows writes. When an
+    existing ProgramData JSON is Administrator-locked against normal users,
+    mirror to LOCALAPPDATA and pin that choice via a marker file.
+    """
+    if os.name != "nt":
+        return _posix_domain_config_default()
+
+    prog = _programdata_domain_config_path()
+    loc = _localappdata_domain_config_path()
+    marker = _use_localappdata_marker_path()
+
+    if marker.exists():
+        loc.parent.mkdir(parents=True, exist_ok=True)
+        if loc.exists():
+            return loc
+        if prog.exists():
+            try:
+                _copy_domain_config_fallback(prog, loc)
+            except OSError as e:
+                logger.error(
+                    "LOCALAPPDATA domain mirror missing and could not be created (%s)",
+                    e,
+                )
+        if loc.exists():
+            return loc
+        marker.unlink(missing_ok=True)
+
+    if prog.exists():
+        if _windows_domain_file_user_can_modify(prog):
+            prog.parent.mkdir(parents=True, exist_ok=True)
+            return prog
+        loc.parent.mkdir(parents=True, exist_ok=True)
+        if not loc.exists():
+            try:
+                _copy_domain_config_fallback(prog, loc)
+            except OSError as e:
+                logger.error(
+                    "ProgramData domain config is not writable (%s); could not mirror to %s: %s",
+                    prog,
+                    loc,
+                    e,
+                )
+                return prog
+        try:
+            marker.write_text("", encoding="utf-8")
+        except OSError:
+            pass
+        logger.warning(
+            "Using per-user domain config at %s (ProgramData copy is restricted for this account).",
+            loc,
+        )
+        return loc
+
+    try:
+        prog.parent.mkdir(parents=True, exist_ok=True)
+        probe = prog.parent / "__fg_progdata_probe.tmp"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+        return prog
+    except OSError:
+        loc.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            marker.write_text("", encoding="utf-8")
+        except OSError:
+            pass
+        logger.warning(
+            "ProgramData is not writable; using per-user domain config at %s",
+            loc,
+        )
+        return loc
 
 
 def _build_default_data() -> Dict[str, Any]:
@@ -448,21 +564,21 @@ class DomainConfigManager:
             logger.debug("Could not send tamper email alert: %s", e)
 
     def _save(self) -> None:
-        """Atomic save: write to temp then rename, and update integrity hash."""
+        """Atomic save via temp file + replace, with in-place fallback for strict ACL."""
         try:
             content_bytes = json.dumps(self._data, indent=2, sort_keys=False).encode("utf-8")
+            self._config_path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = self._config_path.with_suffix(".tmp")
-            with open(tmp_path, "wb") as f:
-                f.write(content_bytes)
-            # Atomic rename (Windows: need to remove target first)
-            if self._config_path.exists():
-                self._config_path.unlink()
-            tmp_path.rename(self._config_path)
+            tmp_path.write_bytes(content_bytes)
+            try:
+                os.replace(tmp_path, self._config_path)
+            except OSError:
+                with open(self._config_path, "wb") as fp:
+                    fp.write(content_bytes)
+                tmp_path.unlink(missing_ok=True)
             self._last_mtime = self._config_path.stat().st_mtime
             self._dirty = False
-            # Update integrity hash
             self._save_hash(content_bytes)
-            # Keep a copy as last known good
             self._last_known_good = json.loads(content_bytes)
             logger.debug("Saved domain config to %s", self._config_path)
         except Exception as e:

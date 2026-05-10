@@ -99,4 +99,5 @@ Recommended pass criteria:
 - If extension appears disconnected, verify tab server health endpoint first.
 - If admin UI is unreachable, verify Focus Guard process is running and port `58393` is free.
 - If reports are not sent, confirm SMTP settings in wizard/settings and check logs.
+- **`Access is denied` saving `domain_config.json` under `%ProgramData%\FocusGuard`:** often the file or folder was created by an elevated install while you run the app as a normal user. This build mirrors domain rules to `%LocalAppData%\FocusGuard\domain_config.json` when ProgramData is not replaceable by your account, and writes a `.domain_config_use_localappdata` marker so future launches stay consistent (restart Focus Guard after migration). Fixing ACL so `Users` can modify `%ProgramData%\FocusGuard` is OK too if you want a machine-wide shared file again.
 

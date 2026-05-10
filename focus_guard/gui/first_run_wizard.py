@@ -9,6 +9,7 @@ Saves a DeploymentConfig at the end.
 import json
 import logging
 import socket
+import sys
 import webbrowser
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -37,7 +38,7 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QAbstractItemView,
     QProgressBar,
-    QTabWidget,
+    QTabBar,
     QWidget,
     QDialog,
     QDialogButtonBox,
@@ -50,6 +51,10 @@ from focus_guard.core.extension_constants import (
     CHROME_STORE_URL,
     EDGE_EXTENSION_ID,
     EDGE_STORE_URL,
+)
+from focus_guard.core.win_store_browser import (
+    open_google_chrome_url,
+    open_microsoft_edge_url,
 )
 
 logger = logging.getLogger(__name__)
@@ -298,7 +303,7 @@ class ExtensionPage(QWizardPage):
             "border-radius: 6px; padding: 8px 20px; font-size: 13px; }"
             "QPushButton:hover { background-color: #106EBE; }"
         )
-        edge_btn.clicked.connect(lambda: webbrowser.open(EDGE_STORE_URL))
+        edge_btn.clicked.connect(lambda: self._open_edge_storefront())
         btn_layout.addWidget(edge_btn)
 
         chrome_btn = QPushButton("  Install for Chrome")
@@ -308,7 +313,7 @@ class ExtensionPage(QWizardPage):
             "border-radius: 6px; padding: 8px 20px; font-size: 13px; }"
             "QPushButton:hover { background-color: #3367D6; }"
         )
-        chrome_btn.clicked.connect(lambda: webbrowser.open(CHROME_STORE_URL))
+        chrome_btn.clicked.connect(lambda: self._open_chrome_storefront())
         btn_layout.addWidget(chrome_btn)
 
         layout.addLayout(btn_layout)
@@ -343,6 +348,22 @@ class ExtensionPage(QWizardPage):
         layout.addWidget(note)
 
         self.setLayout(layout)
+
+    @staticmethod
+    def _open_edge_storefront() -> None:
+        if not (
+            sys.platform == "win32"
+            and open_microsoft_edge_url(EDGE_STORE_URL)
+        ):
+            webbrowser.open(EDGE_STORE_URL)
+
+    @staticmethod
+    def _open_chrome_storefront() -> None:
+        if not (
+            sys.platform == "win32"
+            and open_google_chrome_url(CHROME_STORE_URL)
+        ):
+            webbrowser.open(CHROME_STORE_URL)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -606,19 +627,17 @@ class DomainManagerPage(QWizardPage):
         search_row.addWidget(self.search_box)
         layout.addLayout(search_row)
 
-        # --- Category tabs ---
-        self.tab_widget = QTabWidget()
-        # Populate before connecting currentChanged — addTab emits the signal immediately.
+        # Category filter (tabs without separate pages — one shared table below)
         self._all_domains: list = []
         self._categories: list = []
         self._current_tab_category: str = ""  # "" = All
 
-        self.tab_widget.currentChanged.connect(self._on_tab_changed)
-        layout.addWidget(self.tab_widget)
+        self.category_bar = QTabBar()
+        self.category_bar.setExpanding(False)
+        self.category_bar.addTab("All")
+        self.category_bar.currentChanged.connect(self._on_category_tab_changed)
+        layout.addWidget(self.category_bar)
 
-        # "All" tab with the main table
-        all_tab = QWidget()
-        all_layout = QVBoxLayout()
         self.domain_table = QTableWidget(0, len(self._COLUMNS))
         self.domain_table.setHorizontalHeaderLabels(self._COLUMNS)
         self.domain_table.horizontalHeader().setSectionResizeMode(
@@ -627,9 +646,7 @@ class DomainManagerPage(QWizardPage):
         self.domain_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.domain_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.domain_table.setAlternatingRowColors(True)
-        all_layout.addWidget(self.domain_table)
-        all_tab.setLayout(all_layout)
-        self.tab_widget.addTab(all_tab, "All")
+        layout.addWidget(self.domain_table)
 
         # --- Action buttons ---
         btn_row = QHBoxLayout()
@@ -678,12 +695,14 @@ class DomainManagerPage(QWizardPage):
             # Build category tabs
             cats = sorted({d.get("category", "unknown") for d in self._all_domains})
             self._categories = cats
-            # Remove old tabs (keep "All" at index 0)
-            while self.tab_widget.count() > 1:
-                self.tab_widget.removeTab(1)
+            self.category_bar.blockSignals(True)
+            while self.category_bar.count():
+                self.category_bar.removeTab(0)
+            self.category_bar.addTab("All")
             for cat in cats:
-                tab = QWidget()
-                self.tab_widget.addTab(tab, cat.replace("_", " ").title())
+                self.category_bar.addTab(cat.replace("_", " ").title())
+            self.category_bar.setCurrentIndex(0)
+            self.category_bar.blockSignals(False)
 
             # Load master budget
             mb = mgr.get_master_budget()
@@ -692,6 +711,7 @@ class DomainManagerPage(QWizardPage):
             )
 
             self._populate_table(self._all_domains)
+            self._apply_filter(self.search_box.text())
         except Exception as e:
             logger.warning("Could not load domain data: %s", e)
 
@@ -739,8 +759,8 @@ class DomainManagerPage(QWizardPage):
             visible = text in domain or text in cat
             self.domain_table.setRowHidden(row, not visible)
 
-    def _on_tab_changed(self, index: int) -> None:
-        """Filter by category when a tab is selected."""
+    def _on_category_tab_changed(self, index: int) -> None:
+        """Filter table rows by category tab (shared domain_table)."""
         if index == 0:
             # All
             self._current_tab_category = ""
@@ -750,6 +770,7 @@ class DomainManagerPage(QWizardPage):
             self._current_tab_category = cat
             filtered = [d for d in self._all_domains if d.get("category") == cat]
             self._populate_table(filtered)
+        self._apply_filter(self.search_box.text())
 
     def _get_selected_domains(self) -> list:
         """Return list of selected domain strings."""
