@@ -21,7 +21,7 @@ pip install -r requirements.txt
 python -m focus_guard.main
 ```
 
-On first launch, the setup wizard appears.
+On first launch, the setup wizard appears. On that **first** launch only, the tab server and admin gateway are started in the background before you finish the wizard so **Setup Validation** can reach local health endpoints.
 
 ## 4) Complete first-run wizard
 - Configure email reports (optional but recommended)
@@ -30,7 +30,7 @@ On first launch, the setup wizard appears.
   - Chrome store ID: `hnpfnmlcmdhkbhnfifmnonehebeafclp`
 - Set time limits / budgets
 - Set admin password
-- On the final page, click **Run Setup Validation**
+- On the final page, click **Run Setup Validation** (checks tab server + admin health, API token presence, and whether the tab server sees a connected browser after you install the extension)
   - **Ready**: proceed
   - **Ready with warnings**: review warnings, then proceed if acceptable
   - **Not ready**: fix blocking issue(s) before finishing

@@ -6,6 +6,7 @@ Walks the user through: Welcome → Email → Extension → Done.
 Saves a DeploymentConfig at the end.
 """
 
+import json
 import logging
 import socket
 import webbrowser
@@ -44,7 +45,12 @@ from PyQt5.QtWidgets import (
 
 from focus_guard.core.tab_server_endpoint import resolve_tab_server_base_url
 from focus_guard.core.tab_server_endpoint import resolve_tab_server_endpoint
-from focus_guard.core.extension_constants import CHROME_STORE_URL, EDGE_STORE_URL
+from focus_guard.core.extension_constants import (
+    CHROME_EXTENSION_ID,
+    CHROME_STORE_URL,
+    EDGE_EXTENSION_ID,
+    EDGE_STORE_URL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -316,8 +322,8 @@ class ExtensionPage(QWizardPage):
 
         layout.addWidget(_body(
             "Canonical extension IDs:\n"
-            "  • Edge: legaalcjhhgofgpgbbpoadafdjllckgg\n"
-            "  • Chrome: hnpfnmlcmdhkbhnfifmnonehebeafclp"
+            f"  • Edge: {EDGE_EXTENSION_ID}\n"
+            f"  • Chrome: {CHROME_EXTENSION_ID}"
         ))
 
         self.extension_installed_cb = QCheckBox(
@@ -1089,7 +1095,7 @@ class FinishPage(QWizardPage):
         validation_layout = QVBoxLayout()
         validation_layout.addWidget(_body(
             "Run validation before finishing setup. This checks extension readiness,\n"
-            "admin protection, and local service health endpoints."
+            "live extension connectivity (via the tab server), admin protection, and local service health."
         ))
 
         self.validation_summary = QLabel("Validation not run yet.")
@@ -1118,6 +1124,15 @@ class FinishPage(QWizardPage):
         except (URLError, OSError, ValueError):
             return False
 
+    def _fetch_json(self, url: str) -> Optional[dict]:
+        try:
+            with urlopen(url, timeout=2.0) as resp:  # nosec B310 local endpoint check
+                if not (200 <= int(resp.status) < 300):
+                    return None
+                return json.loads(resp.read().decode("utf-8", errors="replace"))
+        except (URLError, OSError, ValueError, json.JSONDecodeError):
+            return None
+
     def _run_setup_validation(self):
         wizard = self.wizard()
         extension_ok = bool(
@@ -1133,6 +1148,19 @@ class FinishPage(QWizardPage):
         tab_health_ok = self._check_http_ok(f"{tab_base}/api/health")
         admin_health_ok = self._check_http_ok("http://127.0.0.1:58393/admin/health")
 
+        status_payload: Optional[dict] = None
+        auth_payload: Optional[dict] = None
+        if tab_health_ok:
+            status_payload = self._fetch_json(f"{tab_base}/api/status")
+            auth_payload = self._fetch_json(f"{tab_base}/api/auth/status")
+
+        extension_connected = False
+        if isinstance(status_payload, dict):
+            for b in status_payload.get("connected_browsers") or []:
+                if isinstance(b, dict) and b.get("connected"):
+                    extension_connected = True
+                    break
+
         issues = []
         warnings = []
 
@@ -1144,6 +1172,18 @@ class FinishPage(QWizardPage):
             warnings.append("Tab server health endpoint not reachable yet.")
         if not admin_health_ok:
             warnings.append("Admin gateway health endpoint not reachable yet.")
+        if tab_health_ok and isinstance(auth_payload, dict) and not auth_payload.get(
+            "token_exists"
+        ):
+            warnings.append(
+                "Tab server API auth token missing or unreadable — extensions may fail to authenticate."
+            )
+        if extension_ok and tab_health_ok and not extension_connected:
+            warnings.append(
+                "Extension install is confirmed but the tab server does not see a connected browser yet. "
+                "Open Chrome or Edge, ensure Focus Guard is enabled on the store extension, browse any page — "
+                "then click Run Setup Validation again."
+            )
 
         if issues:
             self._validation_level = "not_ready"
@@ -1163,8 +1203,10 @@ class FinishPage(QWizardPage):
             lines.extend([f"• {x}" for x in issues])
         if warnings:
             lines.extend([f"• {x}" for x in warnings])
-        if warnings and (not tab_health_ok or not admin_health_ok):
-            lines.append("• If this is first launch, health checks usually pass after startup.")
+        if not tab_health_ok or not admin_health_ok:
+            lines.append(
+                "• Wait a few seconds and click Run Setup Validation again; services start before this step on first launch."
+            )
 
         self.validation_summary.setText("<br>".join(lines))
         self.validation_summary.setStyleSheet(f"color: {color};")

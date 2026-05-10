@@ -1087,15 +1087,61 @@ def main() -> None:
     qt_app.setQuitOnLastWindowClosed(False)
 
     from focus_guard.gui.first_run_wizard import is_first_run, run_first_run_wizard
+
+    wizard_config = None
+    tab_server_runner = None  # populated during first-run bootstrap or below
+    admin_gw_shutdown = None
+    early_tab_server_host = DEFAULT_TAB_SERVER_HOST
+    early_tab_server_port = DEFAULT_TAB_SERVER_PORT
+    first_run_endpoint_changed = False
+    first_run_bootstrapped_services = False
+
     if is_first_run():
-        logger.info("First run detected — launching setup wizard")
-        icon = _load_icon()
-        wizard_config = run_first_run_wizard(icon=icon)
+        # Start tab server + admin gateway before the wizard so Finish-page
+        # validation can reach /api/health, /api/status, and /admin/health.
+        logger.info("First run detected — starting local services for setup validation")
+        early_tab_server_host, early_tab_server_port = _resolve_tab_server_endpoint_from_config()
+        early_tab_server_host, early_tab_server_port, first_run_endpoint_changed = (
+            _resolve_non_conflicting_tab_server_endpoint(
+                early_tab_server_host,
+                early_tab_server_port,
+            )
+        )
+        if first_run_endpoint_changed:
+            logger.warning(
+                "Tab server port in use — using %s:%d during setup "
+                "(will persist to deployment config after setup completes).",
+                early_tab_server_host,
+                early_tab_server_port,
+            )
+        tab_server_runner = start_tab_server(
+            host=early_tab_server_host,
+            port=early_tab_server_port,
+        )
+        admin_gw_shutdown = _start_admin_gateway(
+            early_tab_server_host,
+            early_tab_server_port,
+        )
+        first_run_bootstrapped_services = True
+
+        logger.info("Launching setup wizard")
+        wizard_config = run_first_run_wizard(icon=_load_icon())
         if wizard_config and wizard_config.run_at_startup:
             try:
                 setup_autostart(enable=True)
             except Exception as e:
                 logger.warning("Could not set up autostart: %s", e)
+
+        if first_run_bootstrapped_services and wizard_config is None:
+            logger.info("First-run wizard cancelled — stopping bootstrap services")
+            if admin_gw_shutdown:
+                admin_gw_shutdown()
+            if tab_server_runner:
+                tab_server_runner.stop()
+            tab_server_runner = None
+            admin_gw_shutdown = None
+        elif wizard_config is not None and first_run_endpoint_changed:
+            _persist_tab_server_endpoint(early_tab_server_host, early_tab_server_port)
 
     # 6. Load deployment config (wizard may have just created it)
     try:
@@ -1118,24 +1164,28 @@ def main() -> None:
     except Exception as e:
         logger.warning("Log cleanup failed: %s", e)
 
-    # 8. Start tab server (daemon thread)
-    tab_server_host, tab_server_port = _resolve_tab_server_endpoint_from_config()
-    tab_server_host, tab_server_port, endpoint_changed = _resolve_non_conflicting_tab_server_endpoint(
-        tab_server_host,
-        tab_server_port,
-    )
-    if endpoint_changed:
-        logger.warning(
-            "Configured tab-server port was busy; falling back to %s:%d",
+    # 8. Start tab server (daemon thread) — may already be running from first-run bootstrap
+    if tab_server_runner is None:
+        tab_server_host, tab_server_port = _resolve_tab_server_endpoint_from_config()
+        tab_server_host, tab_server_port, endpoint_changed = _resolve_non_conflicting_tab_server_endpoint(
             tab_server_host,
             tab_server_port,
         )
-        _persist_tab_server_endpoint(tab_server_host, tab_server_port)
+        if endpoint_changed:
+            logger.warning(
+                "Configured tab-server port was busy; falling back to %s:%d",
+                tab_server_host,
+                tab_server_port,
+            )
+            _persist_tab_server_endpoint(tab_server_host, tab_server_port)
 
-    tab_server_runner = start_tab_server(host=tab_server_host, port=tab_server_port)
+        tab_server_runner = start_tab_server(host=tab_server_host, port=tab_server_port)
+    else:
+        tab_server_host, tab_server_port = _resolve_tab_server_endpoint_from_config()
 
     # 9. Start admin gateway (FastAPI/uvicorn) in daemon thread
-    admin_gw_shutdown = _start_admin_gateway(tab_server_host, tab_server_port)
+    if admin_gw_shutdown is None:
+        admin_gw_shutdown = _start_admin_gateway(tab_server_host, tab_server_port)
 
     # 10. Start coordinator (activity monitor, classification, etc.) in daemon thread
     coordinator_thread = start_coordinator()
