@@ -1434,3 +1434,22 @@ def run_first_run_wizard(icon: Optional[QIcon] = None) -> Optional[object]:
 
     logger.info("First-run wizard cancelled — using defaults")
     return None
+
+
+if __name__ == "__main__":
+    # Supports: `python focus_guard/gui/first_run_wizard.py` from repo root.
+    # The wizard is normally shown from `python -m focus_guard.main` on first run.
+    import sys
+    from pathlib import Path
+
+    _repo_root = Path(__file__).resolve().parents[2]
+    if str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+
+    logging.basicConfig(level=logging.INFO)
+
+    from PyQt5.QtWidgets import QApplication
+
+    app = QApplication(sys.argv)
+    config = run_first_run_wizard()
+    raise SystemExit(0 if config is not None else 1)
