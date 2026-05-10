@@ -155,6 +155,18 @@ Definition of done:
 | E Hosted/remote architecture decision | Planned | |
 | F Low-cost remote login runbook | Planned | |
 
+## Day-by-day execution plans
+
+| Day | Focus | Plan |
+|-----|-------|------|
+| Day 8 | Setup validation + extension onboarding hardening (A + B phase 1) | `docs/planning/mvp/MVP_DAY8_EXECUTION_PLAN.md` |
+| Day 9 | Admin-install + designated monitored-user model (C) | `docs/planning/mvp/MVP_DAY9_EXECUTION_PLAN.md` |
+| Day 10 | Metrics historical query contract and API/test hardening (D) | `docs/planning/mvp/MVP_DAY10_EXECUTION_PLAN.md` |
+| Day 11 | Hosted/remote architecture decision + secure defaults (E) | `docs/planning/mvp/MVP_DAY11_EXECUTION_PLAN.md` |
+| Day 12 | Low-cost remote login runbook + Week 2 closure (F + integration) | `docs/planning/mvp/MVP_DAY12_EXECUTION_PLAN.md` |
+
+**Resume:** Start with `MVP_DAY8_EXECUTION_PLAN.md`, then execute Day 9-12 in order.
+
 ## Exit criteria
 Week 2 is complete when:
 1. All six workstreams above are marked done.
