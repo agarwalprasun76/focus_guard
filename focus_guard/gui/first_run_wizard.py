@@ -9,6 +9,8 @@ Saves a DeploymentConfig at the end.
 import logging
 import socket
 import webbrowser
+from urllib.error import URLError
+from urllib.request import urlopen
 from pathlib import Path
 from typing import Optional
 
@@ -311,6 +313,20 @@ class ExtensionPage(QWizardPage):
             "After installing, the extension will automatically connect to "
             f"Focus Guard's local server (port {tab_server_port}). No extra configuration needed."
         ))
+
+        layout.addWidget(_body(
+            "Canonical extension IDs:\n"
+            "  • Edge: legaalcjhhgofgpgbbpoadafdjllckgg\n"
+            "  • Chrome: hnpfnmlcmdhkbhnfifmnonehebeafclp"
+        ))
+
+        self.extension_installed_cb = QCheckBox(
+            "I installed at least one Focus Guard browser extension from the store."
+        )
+        self.extension_installed_cb.setToolTip(
+            "Required for full blocking behavior and live tab visibility."
+        )
+        layout.addWidget(self.extension_installed_cb)
 
         layout.addStretch()
 
@@ -998,6 +1014,7 @@ class FinishPage(QWizardPage):
         super().__init__(parent)
         self.setTitle("You're All Set!")
         self.setSubTitle("Focus Guard is ready to go.")
+        self._validation_level = "warn"
 
         layout = QVBoxLayout()
 
@@ -1065,9 +1082,113 @@ class FinishPage(QWizardPage):
         self.minimize_cb.setChecked(True)
         layout.addWidget(self.minimize_cb)
 
+        layout.addWidget(_separator())
+
+        # --- Setup validation ---
+        validation_group = QGroupBox("Setup Validation")
+        validation_layout = QVBoxLayout()
+        validation_layout.addWidget(_body(
+            "Run validation before finishing setup. This checks extension readiness,\n"
+            "admin protection, and local service health endpoints."
+        ))
+
+        self.validation_summary = QLabel("Validation not run yet.")
+        self.validation_summary.setWordWrap(True)
+        self.validation_summary.setStyleSheet("color: #9c6500;")
+        validation_layout.addWidget(self.validation_summary)
+
+        self.run_validation_btn = QPushButton("Run Setup Validation")
+        self.run_validation_btn.clicked.connect(self._run_setup_validation)
+        validation_layout.addWidget(self.run_validation_btn)
+        validation_group.setLayout(validation_layout)
+        layout.addWidget(validation_group)
+
         layout.addStretch()
 
         self.setLayout(layout)
+
+    def initializePage(self):
+        # Auto-run once so users see explicit readiness state.
+        self._run_setup_validation()
+
+    def _check_http_ok(self, url: str) -> bool:
+        try:
+            with urlopen(url, timeout=1.5) as resp:  # nosec B310 local endpoint check
+                return 200 <= int(resp.status) < 300
+        except (URLError, OSError, ValueError):
+            return False
+
+    def _run_setup_validation(self):
+        wizard = self.wizard()
+        extension_ok = bool(
+            getattr(getattr(wizard, "extension_page", None), "extension_installed_cb", None)
+            and wizard.extension_page.extension_installed_cb.isChecked()
+        )
+        password_enabled = bool(
+            getattr(getattr(wizard, "password_page", None), "enable_password", None)
+            and wizard.password_page.enable_password.isChecked()
+        )
+
+        tab_base = resolve_tab_server_base_url()
+        tab_health_ok = self._check_http_ok(f"{tab_base}/api/health")
+        admin_health_ok = self._check_http_ok("http://127.0.0.1:58393/admin/health")
+
+        issues = []
+        warnings = []
+
+        if not extension_ok:
+            issues.append("Extension install not confirmed.")
+        if not password_enabled:
+            warnings.append("Admin password is disabled (allowed, but less secure).")
+        if not tab_health_ok:
+            warnings.append("Tab server health endpoint not reachable yet.")
+        if not admin_health_ok:
+            warnings.append("Admin gateway health endpoint not reachable yet.")
+
+        if issues:
+            self._validation_level = "not_ready"
+            color = "#cc0000"
+            title = "Not ready"
+        elif warnings:
+            self._validation_level = "warn"
+            color = "#9c6500"
+            title = "Ready with warnings"
+        else:
+            self._validation_level = "ready"
+            color = "#008800"
+            title = "Ready"
+
+        lines = [f"<b>{title}</b>"]
+        if issues:
+            lines.extend([f"• {x}" for x in issues])
+        if warnings:
+            lines.extend([f"• {x}" for x in warnings])
+        if warnings and (not tab_health_ok or not admin_health_ok):
+            lines.append("• If this is first launch, health checks usually pass after startup.")
+
+        self.validation_summary.setText("<br>".join(lines))
+        self.validation_summary.setStyleSheet(f"color: {color};")
+        self.completeChanged.emit()
+
+    def validatePage(self) -> bool:
+        self._run_setup_validation()
+        if self._validation_level == "ready":
+            return True
+        if self._validation_level == "warn":
+            reply = QMessageBox.question(
+                self,
+                "Setup Warnings",
+                "Setup validation reported warnings. Continue and start Focus Guard anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            return reply == QMessageBox.Yes
+        QMessageBox.warning(
+            self,
+            "Setup Not Ready",
+            "Setup validation found blocking issues. Resolve them before finishing.",
+        )
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════

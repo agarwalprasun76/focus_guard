@@ -10,6 +10,7 @@ Reference: `docs/planning/mvp/INSTALL_WINDOWS.md` for ports and first-run contex
 - [ ] Windows 10/11; correct system date/time (avoids bogus log timestamps).
 - [ ] `python -m focus_guard.main` (or packaged tray) running; tray icon present if applicable.
 - [ ] Browser extension installed and connected (optional for some steps; required for full blocking smoke).
+- [ ] First-run wizard **Setup Validation** ran and is either **Ready** or **Ready with warnings** (no **Not ready** blockers).
 
 ## A) Tab server (58392)
 - [ ] Open `http://127.0.0.1:58392/api/health` — JSON shows healthy (or equivalent success).

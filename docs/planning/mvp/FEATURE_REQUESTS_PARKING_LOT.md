@@ -299,6 +299,19 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+
+### [FR-018]
+- Date: 2026-05-10
+- Requested by: Week 2 architecture review
+- Title: Calendar integration with google calendar etc
+- Priority: P3
+- Area: monitoring and blocking
+- Problem: Current approach is not aware of what the person has going on and blocking decisions cannot be contextualized.
+- Proposed idea: Add ability to synch with the calendar and use that to guide what tools/apps/websites should be available.
+- Why not now: Not needed for MVP but an additional nice to have feature
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)

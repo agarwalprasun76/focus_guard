@@ -26,8 +26,14 @@ On first launch, the setup wizard appears.
 ## 4) Complete first-run wizard
 - Configure email reports (optional but recommended)
 - Install browser extension from store links
+  - Edge store ID: `legaalcjhhgofgpgbbpoadafdjllckgg`
+  - Chrome store ID: `hnpfnmlcmdhkbhnfifmnonehebeafclp`
 - Set time limits / budgets
 - Set admin password
+- On the final page, click **Run Setup Validation**
+  - **Ready**: proceed
+  - **Ready with warnings**: review warnings, then proceed if acceptable
+  - **Not ready**: fix blocking issue(s) before finishing
 - Finish and optionally click **Open Guardian Dashboard**
 
 ### OpenAI / LLM (optional)
@@ -44,6 +50,7 @@ Add or edit the string field next to the existing token fields, then restart Foc
 ## 5) Verify core local endpoints
 - Tab server health: `http://127.0.0.1:58392/api/health`
 - Admin gateway: `http://127.0.0.1:58393/admin`
+- Admin gateway health: `http://127.0.0.1:58393/admin/health`
 
 ## 6) MVP smoke checks (minimum)
 1. Open a known distracting site and confirm block flow.
