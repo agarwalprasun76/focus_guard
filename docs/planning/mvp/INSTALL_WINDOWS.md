@@ -21,7 +21,7 @@ pip install -r requirements.txt
 python -m focus_guard.main
 ```
 
-On first launch, the setup wizard appears. On that **first** launch only, the tab server and admin gateway are started in the background before you finish the wizard so **Setup Validation** can reach local health endpoints.
+On first launch, the setup wizard appears. After you click **Start Focus Guard**, the tray icon starts everything (tab server, admin gateway, etc.). Within a couple of seconds you should see a **Finish setup** window to open the Guardian Dashboard and **Run connection check** once services respond.
 
 ## 4) Complete first-run wizard
 - Configure email reports (optional but recommended)
@@ -30,11 +30,7 @@ On first launch, the setup wizard appears. On that **first** launch only, the ta
   - Chrome store ID: `hnpfnmlcmdhkbhnfifmnonehebeafclp`
 - Set time limits / budgets
 - Set admin password
-- On the final page, click **Run Setup Validation** (checks tab server + admin health, API token presence, and whether the tab server sees a connected browser after you install the extension)
-  - **Ready**: proceed
-  - **Ready with warnings**: review warnings, then proceed if acceptable
-  - **Not ready**: fix blocking issue(s) before finishing
-- Finish and optionally click **Open Guardian Dashboard**
+- Finish the wizard; when the tray has started (~2 seconds later), complete the **Finish setup** dialog (**Open Guardian Dashboard**, **Run connection check**). Retry the check briefly if endpoints are still waking up.
 
 ### OpenAI / LLM (optional)
 

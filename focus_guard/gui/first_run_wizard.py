@@ -6,13 +6,10 @@ Walks the user through: Welcome → Email → Extension → Done.
 Saves a DeploymentConfig at the end.
 """
 
-import json
 import logging
 import socket
 import sys
 import webbrowser
-from urllib.error import URLError
-from urllib.request import urlopen
 from pathlib import Path
 from typing import Optional
 
@@ -56,8 +53,13 @@ from focus_guard.core.win_store_browser import (
     open_google_chrome_url,
     open_microsoft_edge_url,
 )
+from focus_guard.gui.setup_health_checks import admin_dashboard_http_url
 
 logger = logging.getLogger(__name__)
+
+# Gmail SMTP help (opening in the user's browser is clearer than pasted URLs alone)
+_GMAIL_APP_PASSWORDS_URL = "https://myaccount.google.com/apppasswords"
+_GMAIL_2STEP_HELP_URL = "https://support.google.com/accounts/answer/185839"
 
 
 # ---------------------------------------------------------------------------
@@ -187,11 +189,53 @@ class EmailPage(QWizardPage):
         smtp_layout = QVBoxLayout()
 
         smtp_desc = _body(
-            "These settings tell Focus Guard how to send emails. "
-            "For Gmail, use smtp.gmail.com with port 587 and an App Password."
+            "These credentials are only for Focus Guard to log into your outgoing mail server. "
+            "Use the email address that will appear as sender under “Your Email”. "
+            "For Gmail, your normal Gmail password usually does not work here—use Google’s separate "
+            "App password shown in the steps below."
         )
         smtp_desc.setStyleSheet("color: #555; font-size: 11px;")
         smtp_layout.addWidget(smtp_desc)
+
+        gmail_group = QGroupBox("Gmail (@gmail.com): get an App password")
+        gmail_layout = QVBoxLayout()
+
+        gmail_steps_text = QLabel(
+            "<p><b>If you send reports from Gmail (@gmail.com),</b> do this once in your browser:</p>"
+            "<p>1.&nbsp;&nbsp;Sign in to Google as the <b>same inbox</b> you will type under "
+            "&quot;Your Email&quot; (for example your monitoring Gmail account).</p>"
+            "<p>2.&nbsp;&nbsp;Enable <b>2-Step Verification</b>. Until this is on, Google will "
+            "not offer App passwords.</p>"
+            "<p>3.&nbsp;&nbsp;Open <b>App passwords</b>, create one named Focus Guard, and copy the "
+            "<b>16 characters</b> (often shown as four blocks).</p>"
+            "<p>4.&nbsp;&nbsp;Paste them into “Gmail App password” below. That is "
+            "<b>not</b> the password you normally use to sign in to gmail.com.</p>"
+            "<p style=\"color:#666;font-size:11px;\"><i>For Outlook, Yahoo, or another provider, "
+            "use their SMTP or “app password” instructions instead—this block is Gmail-only.</i></p>"
+        )
+        gmail_steps_text.setWordWrap(True)
+        gmail_steps_text.setTextFormat(Qt.RichText)
+        gmail_layout.addWidget(gmail_steps_text)
+
+        gmail_btn_row = QHBoxLayout()
+        open_pw_btn = QPushButton("Open Google “App passwords”")
+        open_pw_btn.clicked.connect(
+            lambda: EmailPage._open_url_in_browser(_GMAIL_APP_PASSWORDS_URL)
+        )
+        open_pw_btn.setToolTip("Opens Google Account → App passwords in your browser.")
+        gmail_btn_row.addWidget(open_pw_btn)
+
+        open_2sv_btn = QPushButton("How to turn on 2-Step Verification")
+        open_2sv_btn.clicked.connect(
+            lambda: EmailPage._open_url_in_browser(_GMAIL_2STEP_HELP_URL)
+        )
+        open_2sv_btn.setToolTip("Google Help: enable 2-Step Verification.")
+        gmail_btn_row.addWidget(open_2sv_btn)
+        gmail_btn_row.addStretch()
+        gmail_layout.addLayout(gmail_btn_row)
+
+        gmail_group.setLayout(gmail_layout)
+        smtp_layout.addWidget(gmail_group)
 
         form = QFormLayout()
 
@@ -206,15 +250,20 @@ class EmailPage(QWizardPage):
         form.addRow("SMTP Port:", self.smtp_port)
 
         self.smtp_user = QLineEdit()
-        self.smtp_user.setPlaceholderText("your.email@gmail.com")
-        self.smtp_user.setToolTip("Your full email address (this is the 'From' address)")
+        self.smtp_user.setPlaceholderText("e.g. monitoring-account@gmail.com")
+        self.smtp_user.setToolTip(
+            "The From / login address for SMTP (often a dedicated Gmail like focusguardapp@gmail.com)."
+        )
         form.addRow("Your Email:", self.smtp_user)
 
         self.smtp_pass = QLineEdit()
         self.smtp_pass.setEchoMode(QLineEdit.Password)
-        self.smtp_pass.setPlaceholderText("App password (not your login password)")
-        self.smtp_pass.setToolTip("For Gmail: create an App Password at myaccount.google.com → Security")
-        form.addRow("App Password:", self.smtp_pass)
+        self.smtp_pass.setPlaceholderText("Paste Google’s 16-character App password here")
+        self.smtp_pass.setToolTip(
+            "Gmail: after 2-Step Verification is on, create an App password and paste those 16 characters. "
+            "Other providers: their SMTP password or app password."
+        )
+        form.addRow("Gmail App password:", self.smtp_pass)
 
         smtp_layout.addLayout(form)
         self.smtp_group.setLayout(smtp_layout)
@@ -257,8 +306,8 @@ class EmailPage(QWizardPage):
         layout.addStretch()
 
         hint = _body(
-            "💡 Tip: For Gmail, you need an App Password (not your regular password).\n"
-            "Go to myaccount.google.com → Security → 2-Step Verification → App passwords."
+            "Tip: Uncheck Enable email reports to configure SMTP later. "
+            "You can reopen settings from the tray when you have the Gmail App password ready."
         )
         hint.setStyleSheet("color: #0066cc; background-color: #e6f2ff; padding: 8px; border-radius: 4px;")
         layout.addWidget(hint)
@@ -269,6 +318,10 @@ class EmailPage(QWizardPage):
         self.smtp_group.setEnabled(enabled)
         self.recip_group.setEnabled(enabled)
         self.frequency.setEnabled(enabled)
+
+    @staticmethod
+    def _open_url_in_browser(url: str) -> None:
+        webbrowser.open(url)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1041,7 +1094,6 @@ class FinishPage(QWizardPage):
         super().__init__(parent)
         self.setTitle("You're All Set!")
         self.setSubTitle("Focus Guard is ready to go.")
-        self._validation_level = "warn"
 
         layout = QVBoxLayout()
 
@@ -1056,22 +1108,20 @@ class FinishPage(QWizardPage):
 
         layout.addWidget(_separator())
 
-        # --- Guardian/Admin Dashboard handoff ---
-        admin_group = QGroupBox("Parent/Guardian Dashboard")
-        admin_layout = QVBoxLayout()
-        admin_url = "http://127.0.0.1:58393/admin"
-        admin_layout.addWidget(
+        dash_url = admin_dashboard_http_url()
+        finish_group = QGroupBox("After you click Start Focus Guard")
+        finish_hint = QVBoxLayout()
+        finish_hint.addWidget(
             _body(
-                "Use the Guardian Dashboard to review activity, adjust rules, and manage settings.\n"
-                f"Dashboard URL: {admin_url}"
+                "The guardian dashboard is not reachable from this wizard because local services "
+                "have not finished starting yet.\n\n"
+                'About two seconds after the tray icon appears, a small "Finish setup" window opens. '
+                "Use Open Guardian Dashboard and Run connection check there—not from this screen.\n\n"
+                f"Dashboard URL (bookmark after it loads): {dash_url}"
             )
         )
-        open_dashboard_btn = QPushButton("Open Guardian Dashboard")
-        open_dashboard_btn.setToolTip("Opens the local admin dashboard in your default browser")
-        open_dashboard_btn.clicked.connect(lambda: webbrowser.open(admin_url))
-        admin_layout.addWidget(open_dashboard_btn)
-        admin_group.setLayout(admin_layout)
-        layout.addWidget(admin_group)
+        finish_group.setLayout(finish_hint)
+        layout.addWidget(finish_group)
 
         layout.addWidget(_separator())
 
@@ -1109,149 +1159,9 @@ class FinishPage(QWizardPage):
         self.minimize_cb.setChecked(True)
         layout.addWidget(self.minimize_cb)
 
-        layout.addWidget(_separator())
-
-        # --- Setup validation ---
-        validation_group = QGroupBox("Setup Validation")
-        validation_layout = QVBoxLayout()
-        validation_layout.addWidget(_body(
-            "Run validation before finishing setup. This checks extension readiness,\n"
-            "live extension connectivity (via the tab server), admin protection, and local service health."
-        ))
-
-        self.validation_summary = QLabel("Validation not run yet.")
-        self.validation_summary.setWordWrap(True)
-        self.validation_summary.setStyleSheet("color: #9c6500;")
-        validation_layout.addWidget(self.validation_summary)
-
-        self.run_validation_btn = QPushButton("Run Setup Validation")
-        self.run_validation_btn.clicked.connect(self._run_setup_validation)
-        validation_layout.addWidget(self.run_validation_btn)
-        validation_group.setLayout(validation_layout)
-        layout.addWidget(validation_group)
-
         layout.addStretch()
 
         self.setLayout(layout)
-
-    def initializePage(self):
-        # Auto-run once so users see explicit readiness state.
-        self._run_setup_validation()
-
-    def _check_http_ok(self, url: str) -> bool:
-        try:
-            with urlopen(url, timeout=1.5) as resp:  # nosec B310 local endpoint check
-                return 200 <= int(resp.status) < 300
-        except (URLError, OSError, ValueError):
-            return False
-
-    def _fetch_json(self, url: str) -> Optional[dict]:
-        try:
-            with urlopen(url, timeout=2.0) as resp:  # nosec B310 local endpoint check
-                if not (200 <= int(resp.status) < 300):
-                    return None
-                return json.loads(resp.read().decode("utf-8", errors="replace"))
-        except (URLError, OSError, ValueError, json.JSONDecodeError):
-            return None
-
-    def _run_setup_validation(self):
-        wizard = self.wizard()
-        extension_ok = bool(
-            getattr(getattr(wizard, "extension_page", None), "extension_installed_cb", None)
-            and wizard.extension_page.extension_installed_cb.isChecked()
-        )
-        password_enabled = bool(
-            getattr(getattr(wizard, "password_page", None), "enable_password", None)
-            and wizard.password_page.enable_password.isChecked()
-        )
-
-        tab_base = resolve_tab_server_base_url()
-        tab_health_ok = self._check_http_ok(f"{tab_base}/api/health")
-        admin_health_ok = self._check_http_ok("http://127.0.0.1:58393/admin/health")
-
-        status_payload: Optional[dict] = None
-        auth_payload: Optional[dict] = None
-        if tab_health_ok:
-            status_payload = self._fetch_json(f"{tab_base}/api/status")
-            auth_payload = self._fetch_json(f"{tab_base}/api/auth/status")
-
-        extension_connected = False
-        if isinstance(status_payload, dict):
-            for b in status_payload.get("connected_browsers") or []:
-                if isinstance(b, dict) and b.get("connected"):
-                    extension_connected = True
-                    break
-
-        issues = []
-        warnings = []
-
-        if not extension_ok:
-            issues.append("Extension install not confirmed.")
-        if not password_enabled:
-            warnings.append("Admin password is disabled (allowed, but less secure).")
-        if not tab_health_ok:
-            warnings.append("Tab server health endpoint not reachable yet.")
-        if not admin_health_ok:
-            warnings.append("Admin gateway health endpoint not reachable yet.")
-        if tab_health_ok and isinstance(auth_payload, dict) and not auth_payload.get(
-            "token_exists"
-        ):
-            warnings.append(
-                "Tab server API auth token missing or unreadable — extensions may fail to authenticate."
-            )
-        if extension_ok and tab_health_ok and not extension_connected:
-            warnings.append(
-                "Extension install is confirmed but the tab server does not see a connected browser yet. "
-                "Open Chrome or Edge, ensure Focus Guard is enabled on the store extension, browse any page — "
-                "then click Run Setup Validation again."
-            )
-
-        if issues:
-            self._validation_level = "not_ready"
-            color = "#cc0000"
-            title = "Not ready"
-        elif warnings:
-            self._validation_level = "warn"
-            color = "#9c6500"
-            title = "Ready with warnings"
-        else:
-            self._validation_level = "ready"
-            color = "#008800"
-            title = "Ready"
-
-        lines = [f"<b>{title}</b>"]
-        if issues:
-            lines.extend([f"• {x}" for x in issues])
-        if warnings:
-            lines.extend([f"• {x}" for x in warnings])
-        if not tab_health_ok or not admin_health_ok:
-            lines.append(
-                "• Wait a few seconds and click Run Setup Validation again; services start before this step on first launch."
-            )
-
-        self.validation_summary.setText("<br>".join(lines))
-        self.validation_summary.setStyleSheet(f"color: {color};")
-        self.completeChanged.emit()
-
-    def validatePage(self) -> bool:
-        self._run_setup_validation()
-        if self._validation_level == "ready":
-            return True
-        if self._validation_level == "warn":
-            reply = QMessageBox.question(
-                self,
-                "Setup Warnings",
-                "Setup validation reported warnings. Continue and start Focus Guard anyway?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            return reply == QMessageBox.Yes
-        QMessageBox.warning(
-            self,
-            "Setup Not Ready",
-            "Setup validation found blocking issues. Resolve them before finishing.",
-        )
-        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════
