@@ -260,6 +260,45 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+### [FR-015]
+- Date: 2026-05-10
+- Requested by: Week 2 architecture review
+- Title: Browser store release automation (Chrome + Edge extension packaging/version checks)
+- Priority: P2
+- Area: extension / release / CI
+- Problem: Extension distribution is currently link/manual oriented; no repeatable pre-publish checks for version parity and package integrity.
+- Proposed idea: Add CI scripts for extension manifest version bump validation, deterministic package output checks, and release checklist artifacts for Chrome + Edge stores.
+- Why not now: Not required to run current MVP in local-first mode.
+- Earliest revisit day: Week 2+ release-hardening sprint
+- Owner:
+- Status: parked
+
+### [FR-016]
+- Date: 2026-05-10
+- Requested by: Week 2 architecture review
+- Title: Remote admin access policy bundle (tunnel + firewall + session hardening playbook)
+- Priority: P2
+- Area: deployment / security / admin_gateway
+- Problem: Even after choosing a remote-access path, operators need a safe and repeatable runbook to avoid opening raw ports insecurely.
+- Proposed idea: Provide scripts/docs for low-cost secure access (e.g., Tailscale/Cloudflare Tunnel), firewall defaults, allowed-origins guidance, and admin session timeout policy.
+- Why not now: Depends on final remote-hosting architecture decision and threat model acceptance.
+- Earliest revisit day: after Week 2 required remote architecture tasks
+- Owner:
+- Status: parked
+
+### [FR-017]
+- Date: 2026-05-10
+- Requested by: Week 2 architecture review
+- Title: Long-term metrics export pipeline (SQLite -> low-cost analytics store)
+- Priority: P2
+- Area: analytics / data platform
+- Problem: Current metrics are queryable locally but difficult to aggregate historically across devices or long retention windows.
+- Proposed idea: Add scheduled export from local SQLite metrics to a low-cost central store (managed Postgres, object storage + Parquet, or similar) with basic backfill support.
+- Why not now: MVP dashboards can operate from local data; this is a scale/ops enhancement.
+- Earliest revisit day: after Week 2 required metrics API + schema tasks
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)
