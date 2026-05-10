@@ -608,6 +608,11 @@ class DomainManagerPage(QWizardPage):
 
         # --- Category tabs ---
         self.tab_widget = QTabWidget()
+        # Populate before connecting currentChanged — addTab emits the signal immediately.
+        self._all_domains: list = []
+        self._categories: list = []
+        self._current_tab_category: str = ""  # "" = All
+
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tab_widget)
 
@@ -652,11 +657,6 @@ class DomainManagerPage(QWizardPage):
         layout.addLayout(btn_row)
 
         self.setLayout(layout)
-
-        # Internal data
-        self._all_domains: list = []
-        self._categories: list = []
-        self._current_tab_category: str = ""  # "" = All
 
     def initializePage(self):
         """Called when the page is shown — load data from DomainConfigManager."""
