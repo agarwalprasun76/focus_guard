@@ -312,8 +312,22 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+
+### [FR-019]
+- Date: 2026-05-10
+- Requested by: Week 2 architecture review
+- Title: Distribution of the executable
+- Priority: P3
+- Area: After MVP
+- Problem: I dont have a way to distribute the application
+- Proposed idea: We need to finalize the application/executable creation so that we can distribute it easily. We also need to ensure it is lightweight and has all required dependencies and nothing additional (ensure it is compliant for security/ ensure it doesnt have any openai secrets)
+
+- Why not now: Not needed for MVP but an additional nice to have feature
+- Owner:
+- Status: parked
+
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)
 - [ ] Next day scope remains unchanged unless P0 blocker
-
