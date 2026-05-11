@@ -389,6 +389,71 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+### [FR-024]
+- Date: 2026-05-10
+- Requested by: Day 11 remote admin / ADR-001 follow-up
+- Title: External identity for admin gateway (OIDC / SAML / edge Access) beyond shared password
+- Priority: P2
+- Area: admin_gateway / auth / admin_ui / deployment docs
+- Problem: MVP admin auth is **wizard password + signed bearer tokens** stored/processed locally. When the dashboard is reached through a **tunnel or corporate edge** (ADR-001 canonical path), operators often want **SSO**, **MFA at IdP**, **joiner/offboarding** via group membership, and **separation** between “tunnel URL is public” and “only corp users can authenticate.” Today that is delegated entirely to the tunnel vendor (e.g. Cloudflare Access in front of `cloudflared`) without a first-class in-app story or test matrix.
+- Proposed idea: Design optional **OIDC (Authorization Code + PKCE)** or **SAML SP** mode for `admin_gateway`, with clear split: (A) edge-only auth unchanged, (B) gateway validates OIDC id_token / session cookie, (C) hybrid — edge for TLS, gateway for app session. Document supported IdPs; preserve local-password mode for air-gapped installs.
+- Why not now: Large security + UX surface; needs threat model, token storage, CSRF/session fixation review, and CI contract tests per IdP.
+- Earliest revisit day: after Day 12 tunnel runbook is validated with real operators
+- Owner:
+- Status: parked
+
+### [FR-025]
+- Date: 2026-05-10
+- Requested by: Day 11 remote admin posture
+- Title: Admin login hardening + mutation audit trail (abuse resistance when remotely reachable)
+- Priority: P2
+- Area: admin_gateway / auth_service / logging / ops
+- Problem: Remote access increases exposure to **credential guessing** and **token theft** vs localhost-only. There is no structured **audit log** of who changed enforcement mode, domain category, budgets, or exceptions (beyond scattered tab-server logs). Lockout / backoff / IP binding are not productized.
+- Proposed idea: Configurable **rate limits** on `/auth/login` (per IP + per username), **exponential backoff** or temporary lockout after N failures, optional **allowlist CIDR** for admin routes when `FOCUS_GUARD_ADMIN_*` indicates non-local use. Append-only **admin_audit** stream (JSONL or SQLite): actor (sub or `admin`), action, resource id, timestamp UTC, request_id, success/fail. Optional webhook or Windows Event Log sink for guardians.
+- Why not now: Requires storage location (ProgramData vs user), retention policy, and privacy review; must not regress local dev ergonomics.
+- Earliest revisit day: post Day 12 if pilot guardians report auth noise or policy tampering concerns
+- Owner:
+- Status: parked
+
+### [FR-026]
+- Date: 2026-05-10
+- Requested by: Day 11 tunnel + CORS operator friction
+- Title: Runtime admin UI base URL / API host + smoother tunnel hostname alignment
+- Priority: P3
+- Area: admin_ui / admin_gateway / build / docs
+- Problem: **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** must list each browser `Origin` exactly. Ephemeral tunnel hostnames (e.g. quick tunnels) or **custom domains** require rebuild or env churn; Vite `admin_ui` may assume relative `/admin/api` paths that only work when UI and gateway share origin — tunnel setups sometimes serve UI from edge while API is elsewhere unless carefully aligned.
+- Proposed idea: Single **runtime config** (e.g. `config.json` next to static dist or `window.__FG_CONFIG__` injected at serve time) for `apiBaseUrl` and `allowedOrigins` documentation generator. Optional **admin_gateway** endpoint `GET /admin/api/v1/meta/cors-hint` returning recommended `Origin` for current request (dev-only or auth-gated). CI: build admin UI once, run e2e against arbitrary `BASE_URL`.
+- Why not now: UX research on smallest config surface; avoid over-engineering before Day 12 runbook feedback.
+- Earliest revisit day: after Day 12 runbook + one real tunnel provider path is stable
+- Owner:
+- Status: parked
+
+### [FR-027]
+- Date: 2026-05-10
+- Requested by: Day 11 ADR-001 “split topology” edge case
+- Title: Secured non-loopback tab-server access (TLS / mTLS / signed requests) for split guardian vs monitored machine
+- Priority: P3
+- Area: tab_server / admin_gateway / TabServerClient / deployment
+- Problem: Today the **admin gateway** talks to the **tab server** via configurable `FOCUS_GUARD_TAB_SERVER_BASE_URL`, typically **loopback**. If a future topology places **gateway on a guardian laptop** and tab server on the **kid PC** (or container), traffic crosses a network — **cleartext HTTP**, bearer trust, and **no mTLS** become blocking security gaps. ADR-001 intentionally deferred this.
+- Proposed idea: Spec **TLS listener** on tab server (or sidecar reverse proxy), **pinned cert** or **mTLS** client certs issued per device, request signing or short-lived tab-server JWT minted by gateway. Document minimum viable: **Tailscale only** (private IP + OS firewall) vs **full TLS in product**.
+- Why not now: No MVP customer requirement for split-host; increases support burden and Windows cert UX.
+- Earliest revisit day: if FR-023 multi-user or “remote gateway without RDP” gains traction
+- Owner:
+- Status: parked
+
+### [FR-028]
+- Date: 2026-05-10
+- Requested by: ADR-001 option 4 (hosted relay) deferred scope
+- Title: Fleet / hosted control plane (device registry, push policy, aggregated monitoring)
+- Priority: P3
+- Area: product / backend / admin_ui / compliance
+- Problem: Per-device tunnels and local passwords **do not scale** to schools, MSPs, or multi-household fleets. Operators want **inventory**, **version drift**, **bulk rule updates**, and **central audit** without SSH/RDP to each PC.
+- Proposed idea: Minimal **device registry** (opaque device id, public key, last seen), **outbound-only agent** on each machine (no inbound ports), **command queue** (policy sync, config fetch), **read-only telemetry** aggregation. Long-term: tenant RBAC, data residency, billing — explicit non-goals until MVP field learnings exist.
+- Why not now: Explicitly **out of scope** for Week 2 per `MVP_SPRINT_MASTER_PLAN_Week2.md`; overlaps commercial roadmap.
+- Earliest revisit day: post-MVP when ≥N pilot deployments ask for central admin
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)
