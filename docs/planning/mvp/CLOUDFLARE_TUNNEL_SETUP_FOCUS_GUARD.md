@@ -39,9 +39,9 @@ After install, confirm:
 cloudflared --version
 ```
 
-**If `cloudflared` is “not recognized” right after `winget install`:** the MSI updated **machine** `PATH`, but **this PowerShell window** still has the old environment. Do one of the following:
+**If `cloudflared` is “not recognized” right after `winget install`:** the MSI updated **machine** `PATH`, but **this PowerShell window** still has the old environment. **Cursor / VS Code terminals** often inherit `PATH` from when the **IDE started**, so even a “new” terminal tab can stay stale until you reload `PATH` (below) or **fully restart Cursor**.
 
-1. **Easiest:** close the terminal (or restart Cursor / VS Code), open a **new** PowerShell window, then run `cloudflared --version` again.
+1. **Easiest:** fully **quit and reopen Cursor** (or VS Code), then open a new terminal and run `cloudflared --version` again.
 2. **Reload `PATH` in the current session** (then try `cloudflared` again):
 
    ```powershell
