@@ -29,7 +29,9 @@ So: **remote guardian access only needs** a reachable `https` hostname that Clou
 
 1. **Register your first domain (recommended for a stable tunnel URL)**  
    - Pick **any available** name you are willing to pay yearly for (it does **not** need to say “family” or “Focus Guard”). Short names are easier to type on a phone.  
-   - You can register through **Cloudflare Registrar** (while adding the site to Cloudflare) or another registrar, then **add the zone to Cloudflare** and point **nameservers** as Cloudflare shows.  
+   - **Where to register:** any **ICANN-accredited registrar** works. Common choices include **[Cloudflare Registrar](https://www.cloudflare.com/products/registrar/)** (often at-cost pricing; DNS already in Cloudflare if you buy there), **[Namecheap](https://www.namecheap.com/)**, **[Porkbun](https://porkbun.com/)**, **[Google Domains customers → Squarespace Domains](https://domains.squarespace.com/)** (legacy migrations), or your hosting provider’s domain shop. Compare **total checkout** (first year + renewal; privacy/WHOIS if extra).  
+   - If you buy **outside** Cloudflare: create a **free Cloudflare account**, **add site** → enter the domain → Cloudflare will show **two nameservers**; at your **registrar**, replace the domain’s nameservers with those values (propagation can take up to 48 hours, often faster).  
+   - If you buy **at Cloudflare Registrar**: the zone is already on Cloudflare.  
    - After DNS is active, create the tunnel **public hostname** on that domain (e.g. `https://guardian.your-new-domain.com` or the apex `https://your-new-domain.com`) and set `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` to match.
 
 2. **Try a free ephemeral URL first (good for a day-one test only)**  
