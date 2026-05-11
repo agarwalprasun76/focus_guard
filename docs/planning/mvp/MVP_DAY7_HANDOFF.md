@@ -82,6 +82,10 @@ Complete `MVP_SMOKE_TEST.md` later, or treat this waiver as satisfying the “re
 - Backlog and wishes: `docs/planning/mvp/FEATURE_REQUESTS_PARKING_LOT.md`
 - Broader themes (from sprint todos): optional central DB / export (`centralize-data-model`), HTTP remote config/decision service (`remote-config-decision-service`)
 
+### Week 2 continuity — remote admin / guardian dashboard
+
+Architecture decision (localhost vs LAN vs tunnel vs SaaS relay): **`docs/planning/mvp/ADR_001_REMOTE_ADMIN_ACCESS.md`** — accepted Day 11; canonical MVP+ remote path is **outbound HTTPS tunnel terminating on `http://127.0.0.1:58393`**, **not** default consumer port‑forward of `58393`. Operator guardrails live in **`docs/planning/mvp/INSTALL_WINDOWS.md`** (§ Remote guardian access). Runnable tunnel copy‑paste belongs to **Day 12** (`docs/planning/mvp/MVP_DAY12_EXECUTION_PLAN.md`, Workstream F).
+
 ## Next actions (owner)
 
 1. ~~Commit the RC snapshot~~ **Done** — see **Frozen snapshot** above.

@@ -9,20 +9,28 @@ from typing import Optional
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from focus_guard.core.admin_gateway.config import AdminGatewayConfig
+from focus_guard.core.admin_gateway.config import load_admin_gateway_config
 from focus_guard.core.tab_server_endpoint import resolve_tab_server_base_url
 
 logger = logging.getLogger(__name__)
 
 
+def _loopback_health_host(cfg_host: str) -> str:
+    """URL host for probing a server bound to all interfaces."""
+
+    if cfg_host in {"0.0.0.0", "::"}:
+        return "127.0.0.1"
+    return cfg_host
+
+
 def admin_dashboard_http_url() -> str:
-    cfg = AdminGatewayConfig()
-    return f"http://{cfg.host}:{cfg.port}/admin"
+    cfg = load_admin_gateway_config()
+    return f"http://{_loopback_health_host(cfg.host)}:{cfg.port}/admin"
 
 
 def admin_health_http_url() -> str:
-    cfg = AdminGatewayConfig()
-    return f"http://{cfg.host}:{cfg.port}/admin/health"
+    cfg = load_admin_gateway_config()
+    return f"http://{_loopback_health_host(cfg.host)}:{cfg.port}/admin/health"
 
 
 def _check_http_ok(url: str, timeout: float = 2.0) -> bool:

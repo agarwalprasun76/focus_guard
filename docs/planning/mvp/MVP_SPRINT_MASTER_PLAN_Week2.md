@@ -152,8 +152,8 @@ Definition of done:
 | B Extension store flow hardening | Planned | |
 | C Admin install + designated user model | Planned | |
 | D Metrics historical query contract | Planned | |
-| E Hosted/remote architecture decision | Planned | |
-| F Low-cost remote login runbook | Planned | |
+| E Hosted/remote architecture decision | Done | `docs/planning/mvp/ADR_001_REMOTE_ADMIN_ACCESS.md`; `INSTALL_WINDOWS.md` § Remote guardian access; env-driven binds/origins (`FOCUS_GUARD_ADMIN_*` in `focus_guard/core/admin_gateway/config.py`; `focus_guard/main.py` uses same config for in-process gateway) |
+| F Low-cost remote login runbook | Planned | Execute Day 12; ties ADR‑001 to copy‑paste tunnel steps + smoke checklist |
 
 ## Day-by-day execution plans
 

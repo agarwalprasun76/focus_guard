@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.responses import RedirectResponse
 
-from focus_guard.core.admin_gateway.config import AdminGatewayConfig
+from focus_guard.core.admin_gateway.config import AdminGatewayConfig, load_admin_gateway_config
 from focus_guard.core.admin_gateway.error_handling import build_error_envelope
 from focus_guard.core.admin_gateway.error_handling import register_error_handlers
 from focus_guard.core.admin_gateway.models import HealthResponse
@@ -21,7 +21,7 @@ from focus_guard.core.admin_gateway.routers import include_routers
 def create_app(config: AdminGatewayConfig | None = None) -> FastAPI:
     """Create and configure the admin gateway app instance."""
 
-    cfg = config or AdminGatewayConfig()
+    cfg = config or load_admin_gateway_config()
 
     app = FastAPI(
         title="FocusGuard Admin Gateway",

@@ -617,8 +617,6 @@ def stop_activity_logger() -> None:
 
 _admin_gw_server = None  # uvicorn.Server instance
 
-_ADMIN_GATEWAY_PORT = 58393
-
 
 def _start_admin_gateway(tab_server_host: str, tab_server_port: int) -> Optional[callable]:
     """Start the admin gateway (FastAPI) via uvicorn in a daemon thread.
@@ -630,6 +628,7 @@ def _start_admin_gateway(tab_server_host: str, tab_server_port: int) -> Optional
     try:
         import uvicorn
         from focus_guard.core.admin_gateway.app import create_app
+        from focus_guard.core.admin_gateway.config import DEFAULT_ADMIN_GATEWAY_HOST, load_admin_gateway_config
     except Exception:
         logger.warning("uvicorn or admin_gateway not available — admin UI disabled")
         return None
@@ -647,18 +646,28 @@ def _start_admin_gateway(tab_server_host: str, tab_server_port: int) -> Optional
         f"http://{tab_server_host}:{tab_server_port}"
     )
 
-    port = _ADMIN_GATEWAY_PORT
+    gw_cfg = load_admin_gateway_config()
+    host = gw_cfg.host
+    port = gw_cfg.port
 
+    if host != DEFAULT_ADMIN_GATEWAY_HOST:
+        logger.warning(
+            "Admin gateway bind host is %s (non-loopback). Do not expose a raw public listener; "
+            "see docs/planning/mvp/INSTALL_WINDOWS.md § Remote guardian access.",
+            host,
+        )
+
+    loopback_probe = host if host not in {"0.0.0.0", "::"} else DEFAULT_ADMIN_GATEWAY_HOST
     # Check if port is already in use (another admin gateway running)
-    if not _is_local_port_available("127.0.0.1", port):
+    if not _is_local_port_available(loopback_probe, port):
         logger.info("Admin gateway port %d already in use — assuming external instance", port)
         return None
 
-    app = create_app()
+    app = create_app(gw_cfg)
 
     config = uvicorn.Config(
         app=app,
-        host="127.0.0.1",
+        host=host,
         port=port,
         log_level="warning",
         log_config=None,  # Disable uvicorn's own logging config to avoid isatty issues
@@ -673,15 +682,16 @@ def _start_admin_gateway(tab_server_host: str, tab_server_port: int) -> Optional
 
     t = threading.Thread(target=_run, name="AdminGatewayThread", daemon=True)
     t.start()
-    logger.info("Admin gateway starting on 127.0.0.1:%d", port)
+    logger.info("Admin gateway starting on %s:%d", host, port)
 
     # Wait briefly for it to become ready
     for _ in range(30):
         time.sleep(0.5)
         try:
-            resp = urlopen(f"http://127.0.0.1:{port}/admin/health", timeout=1)
+            probe = DEFAULT_ADMIN_GATEWAY_HOST if host in {"0.0.0.0", "::"} else loopback_probe
+            resp = urlopen(f"http://{probe}:{port}/admin/health", timeout=1)
             if resp.status == 200:
-                logger.info("Admin gateway ready on 127.0.0.1:%d", port)
+                logger.info("Admin gateway ready on %s:%d", probe, port)
                 break
         except Exception:
             pass

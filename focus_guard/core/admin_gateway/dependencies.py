@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from fastapi import Depends, Header
 
-from focus_guard.core.admin_gateway.config import AdminGatewayConfig
+from focus_guard.core.admin_gateway.config import AdminGatewayConfig, load_admin_gateway_config
 from focus_guard.core.admin_gateway.error_handling import http_error, translate_service_error
 from focus_guard.core.admin_gateway.services.auth_service import AuthService
 from focus_guard.core.admin_gateway.services.tab_server_client import TabServerClient
@@ -15,12 +15,9 @@ _AUTH_SERVICE: AuthService | None = None
 
 
 def get_gateway_config() -> AdminGatewayConfig:
-    """Return default gateway config.
+    """Return gateway config (defaults + ``FOCUS_GUARD_ADMIN_*`` environment overrides)."""
 
-    TODO: wire to DeploymentConfig/environment overrides in P2-02+.
-    """
-
-    return AdminGatewayConfig()
+    return load_admin_gateway_config()
 
 
 def get_tab_server_client() -> TabServerClient:

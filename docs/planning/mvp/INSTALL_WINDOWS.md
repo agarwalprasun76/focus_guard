@@ -62,6 +62,27 @@ Add or edit the string field next to the existing token fields, then restart Foc
 - Admin gateway: `http://127.0.0.1:58393/admin`
 - Admin gateway health: `http://127.0.0.1:58393/admin/health`
 
+### Remote guardian access (canonical MVP+ profile — Day 11)
+
+Operators often need **rules, exceptions, enforcement mode, budgets, and monitoring** from another device. The endorsed model is documented in **`docs/planning/mvp/ADR_001_REMOTE_ADMIN_ACCESS.md`**. Summary:
+
+| Approach | MVP stance |
+|----------|------------|
+| **Localhost-only** | Default and safest when the guardian sits at the monitored PC |
+| **LAN / `0.0.0.0` binding + router port-forward** | **Not** the default recipe — high blast radius; easy to accidentally expose the admin SPA + API broadly |
+| **Outbound tunnel → `127.0.0.1:58393` (canonical remote)** | **Preferred for remote guardians** — no inbound firewall pinhole when implemented as **localhost target + outbound tunnel** |
+
+**Canonical remote profile:** run the admin gateway on **`127.0.0.1`** (default) and use an **outbound HTTPS tunnel** (e.g. **Cloudflare Tunnel + Access**, or an equivalent “reverse proxy / edge auth” stack) whose **origin** forwards to `http://127.0.0.1:58393`. The tunnel terminator handles TLS; Focus Guard stays off the raw public TCP port pattern.
+
+Concrete copy-paste runbooks evolve in **Day 12** (`MVP_DAY12_EXECUTION_PLAN.md`). Until then:
+
+1. **Do not** open a generic “DMZ / forward port **58393**” rule on a home router as your first step.
+2. Keep a **strong, unique wizard admin password**; treat dashboard access as administrative control over blocking and data.
+3. When the SPA is loaded from **any hostname other than** `localhost` / `127.0.0.1` on port `58393`, set **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** to a comma-separated list of allowed **`Origin`** values (scheme + host + port, **no trailing path** — e.g. `https://your-tunnel-host.example.com`).
+4. Optional bind overrides (`FOCUS_GUARD_ADMIN_GATEWAY_HOST` / `_PORT`): default remains loopback-only. Changing `HOST` away from **`127.0.0.1`** logs a warning and belongs only in deliberate LAN/VPN topologies paired with firewall review — **still** avoid naked Internet port-forward unless you explicitly accept ADR‑documented risk.
+
+Related environment variables live in **`focus_guard/core/admin_gateway/config.py`** (module docstring).
+
 ## 6) MVP smoke checks (minimum)
 1. Open a known distracting site and confirm block flow.
 2. Request an override and confirm override session behavior.
