@@ -11,6 +11,18 @@ This guide assumes the **monitored PC** runs Focus Guard and the admin gateway o
 
 If we later add an **optional assistant** inside Focus Guard (download official binary, health check, maybe service install), that work is tracked as **`FEATURE_REQUESTS_PARKING_LOT.md` [FR-030]** and will be called out in `INSTALL_WINDOWS.md` when shipped.
 
+### Do I need to buy a domain (e.g. `focus-guard.com`)?
+
+**No — not strictly.** Buying a domain you control is the **most stable** way to get a fixed `https://…` URL for your tunnel, but it is optional if you accept other tradeoffs:
+
+| Approach | Extra domain cost? | Tradeoff |
+|----------|-------------------|----------|
+| **Subdomain of a domain you already own** | **$0** (you already pay for it) | Best value: e.g. `https://guardian.your-existing-domain.com`. |
+| **Cloudflare “quick tunnel” / trycloudflare-style URL** | **$0** | Random hostname that **changes** when the tunnel restarts → you must update `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` each time (tedious). |
+| **Register a new domain** (e.g. `focus-guard.com`) | **Roughly on the order of $10–20 USD/year** for many `.com` names, **plus** possible upsells (privacy, email). Exact price depends on **registrar**, promotions, and TLD — check the registrar’s cart; we do not quote live prices here. | Stable URL, branding, easy to remember. |
+
+So: **remote guardian access only needs** a reachable `https` hostname that Cloudflare fronts to `http://127.0.0.1:58393` **and** a matching `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`. That hostname can be a **subdomain you already have** or a **paid** domain — your choice.
+
 ### End-to-end checklist — remote guardian can open the admin UI
 
 Do these **on the monitored PC** (where Focus Guard runs), unless noted.
