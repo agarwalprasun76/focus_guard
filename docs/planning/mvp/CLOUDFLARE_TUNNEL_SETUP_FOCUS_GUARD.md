@@ -11,6 +11,25 @@ This guide assumes the **monitored PC** runs Focus Guard and the admin gateway o
 
 If we later add an **optional assistant** inside Focus Guard (download official binary, health check, maybe service install), that work is tracked as **`FEATURE_REQUESTS_PARKING_LOT.md` [FR-030]** and will be called out in `INSTALL_WINDOWS.md` when shipped.
 
+### End-to-end checklist — remote guardian can open the admin UI
+
+Do these **on the monitored PC** (where Focus Guard runs), unless noted.
+
+| Step | Action |
+|------|--------|
+| 1 | Start **Focus Guard** and confirm locally: `http://127.0.0.1:58393/admin` loads and `http://127.0.0.1:58393/admin/health` returns OK. |
+| 2 | Ensure you have a **Cloudflare** account and a **domain** whose DNS is managed by Cloudflare. |
+| 3 | Install **`cloudflared`** (§1). If `cloudflared` is not found in the terminal, reload `PATH` or restart Cursor (§1). |
+| 4 | In **Zero Trust → Networks → Connectors → Cloudflare Tunnels**, **Create a tunnel**, then run the dashboard’s **`cloudflared.exe service install …`** command in **Administrator** PowerShell on this PC. |
+| 5 | In the tunnel config, add a **public hostname** (e.g. `guardian.example.com`) whose **service URL** is **`http://127.0.0.1:58393`** (HTTP, not HTTPS, to loopback). |
+| 6 | Set environment variable **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** to exactly **`https://guardian.example.com`** (your real hostname; scheme + host, no path). Apply it to the **same user/service account** that starts Focus Guard. |
+| 7 | **Restart Focus Guard** so it reads the new env var. |
+| 8 | *(Strongly recommended)* Add **Cloudflare Access** on that hostname so the world does not see your login page without SSO/MFA (§7 in this doc). |
+| 9 | On a **different network** (e.g. phone on cellular), open **`https://guardian.example.com/admin`** and log in with the **wizard admin password**. |
+| 10 | *(Optional)* From any machine that can reach the URL: `python scripts/admin_gateway_smoke.py --password "<pwd>" --base-url https://guardian.example.com` |
+
+More detail for each row is in the sections below. **`INSTALL_WINDOWS.md`** § Remote guardian access has the same architecture summary and links back here.
+
 ---
 
 ## 0) Prerequisites
