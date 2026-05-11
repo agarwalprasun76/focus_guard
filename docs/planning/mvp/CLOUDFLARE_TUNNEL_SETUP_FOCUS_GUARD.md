@@ -23,6 +23,24 @@ If we later add an **optional assistant** inside Focus Guard (download official 
 
 So: **remote guardian access only needs** a reachable `https` hostname that Cloudflare fronts to `http://127.0.0.1:58393` **and** a matching `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`. That hostname can be a **subdomain you already have** or a **paid** domain — your choice.
 
+### I have never owned a domain — is that a problem?
+
+**No.** Many households have **no** domain until they need one for something like this. You have three practical paths:
+
+1. **Register your first domain (recommended for a stable tunnel URL)**  
+   - Pick **any available** name you are willing to pay yearly for (it does **not** need to say “family” or “Focus Guard”). Short names are easier to type on a phone.  
+   - You can register through **Cloudflare Registrar** (while adding the site to Cloudflare) or another registrar, then **add the zone to Cloudflare** and point **nameservers** as Cloudflare shows.  
+   - After DNS is active, create the tunnel **public hostname** on that domain (e.g. `https://guardian.your-new-domain.com` or the apex `https://your-new-domain.com`) and set `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` to match.
+
+2. **Try a free ephemeral URL first (good for a day-one test only)**  
+   - Running a **quick tunnel** from a terminal (not the full named-tunnel + DNS flow) can give you a random `*.trycloudflare.com`-style URL with **no** domain purchase.  
+   - **Downside:** the hostname **changes** when the process stops, so you must **update** `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` and restart Focus Guard each time — fine to prove the concept, tedious for real use. See Cloudflare docs for **quick tunnels** / `cloudflared tunnel --url` style workflows.
+
+3. **Skip a public URL entirely**  
+   - Use **Remote Desktop**, **Chrome Remote Desktop**, or similar to the monitored PC, then open `http://127.0.0.1:58393/admin` **on that PC** (`INSTALL_WINDOWS.md` fallback table). **$0** domain cost; higher friction.
+
+**Summary:** not having a family domain is normal. For **convenient** remote guardian access with Cloudflare Tunnel, most people **register one small domain** once; for **zero spend**, use screen share to the PC or a **quick tunnel** for experiments.
+
 ### End-to-end checklist — remote guardian can open the admin UI
 
 Do these **on the monitored PC** (where Focus Guard runs), unless noted.
@@ -30,7 +48,7 @@ Do these **on the monitored PC** (where Focus Guard runs), unless noted.
 | Step | Action |
 |------|--------|
 | 1 | Start **Focus Guard** and confirm locally: `http://127.0.0.1:58393/admin` loads and `http://127.0.0.1:58393/admin/health` returns OK. |
-| 2 | Ensure you have a **Cloudflare** account and a **domain** whose DNS is managed by Cloudflare. |
+| 2 | Ensure you have a **Cloudflare** account and a **domain** whose DNS is managed by Cloudflare. If you have never owned a domain, **register one** (any registrar) and add the zone to Cloudflare, or use a **quick tunnel** for testing only (see § above “never owned a domain”). |
 | 3 | Install **`cloudflared`** (§1). If `cloudflared` is not found in the terminal, reload `PATH` or restart Cursor (§1). |
 | 4 | In **Zero Trust → Networks → Connectors → Cloudflare Tunnels**, **Create a tunnel**, then run the dashboard’s **`cloudflared.exe service install …`** command in **Administrator** PowerShell on this PC. |
 | 5 | In the tunnel config, add a **public hostname** (e.g. `guardian.example.com`) whose **service URL** is **`http://127.0.0.1:58393`** (HTTP, not HTTPS, to loopback). |
