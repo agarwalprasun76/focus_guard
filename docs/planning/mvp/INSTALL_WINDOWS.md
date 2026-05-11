@@ -76,6 +76,9 @@ Operators often need **rules, exceptions, enforcement mode, budgets, and monitor
 
 #### Day 12 — Practical remote login runbook (out-of-network)
 
+**Step-by-step Cloudflare setup (vendor UI changes over time):**  
+`docs/planning/mvp/CLOUDFLARE_TUNNEL_SETUP_FOCUS_GUARD.md`
+
 **Security guardrails (read first)**
 
 1. **Do not** open a generic “DMZ / forward port **58393**” rule on a home router as your first step.
