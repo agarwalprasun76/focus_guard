@@ -41,6 +41,17 @@ So: **remote guardian access only needs** a reachable `https` hostname that Clou
 
 **Summary:** not having a family domain is normal. For **convenient** remote guardian access with Cloudflare Tunnel, most people **register one small domain** once; for **zero spend**, use screen share to the PC or a **quick tunnel** for experiments.
 
+### How often does the tunnel restart? Will my URL change?
+
+It depends which setup you use:
+
+| Setup | What “restart” usually means | Does the **public URL** change? |
+|-------|--------------------------------|-----------------------------------|
+| **Named tunnel** + `cloudflared` **Windows service** (recommended in this doc) | The connector runs in the background. It stops/restarts when **Windows reboots**, you **stop/start the service**, you **upgrade** `cloudflared`, or the process **crashes** (rare). Short **network blips** usually cause a **reconnect**, not a new hostname. | **No** — your chosen hostname (e.g. `https://guardian.example.com`) stays the same; DNS and tunnel name are stable. |
+| **Quick tunnel** (`trycloudflare`-style, ad‑hoc `cloudflared tunnel --url …` in a terminal) | The tunnel ends whenever that **process exits** (close PowerShell, log off, reboot, Ctrl+C). Starting again often mints a **new** random hostname. | **Yes** (new URL per run) — that is why `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` must be updated each time. |
+
+Cloudflare may occasionally restart **their** side of a long-lived connection; the **named** client normally reconnects automatically without changing your public hostname. For day-to-day stability, use a **named tunnel + service install**, not a quick tunnel.
+
 ### End-to-end checklist — remote guardian can open the admin UI
 
 Do these **on the monitored PC** (where Focus Guard runs), unless noted.
