@@ -518,15 +518,40 @@ class DomainConfigManager:
             return True  # Don't block on read errors
 
     def _config_is_under_system_temp(self) -> bool:
-        """True when config lives under the OS temp directory.
+        """True when config lives under a system temp directory.
 
         Pytest and ``scripts/test_section8_mitigations.py`` intentionally tamper with a
         temp ``domain_config.json``; we must not send real SMTP alerts for that path.
+
+        Checks ``tempfile.gettempdir()`` plus ``TEMP`` / ``TMP`` / ``TMPDIR`` and uses
+        ``Path.is_relative_to`` so Windows short paths and alternate env layouts still
+        resolve under the same logical temp root.
         """
         try:
             p = self._config_path.resolve()
-            root = Path(tempfile.gettempdir()).resolve()
-            return root == p or root in p.parents
+            roots: List[Path] = []
+            roots.append(Path(tempfile.gettempdir()).resolve())
+            for key in ("TEMP", "TMP", "TMPDIR"):
+                raw = os.environ.get(key)
+                if raw:
+                    try:
+                        roots.append(Path(raw).resolve())
+                    except Exception:
+                        continue
+            seen: Set[str] = set()
+            unique_roots: List[Path] = []
+            for r in roots:
+                key = str(r).casefold()
+                if key not in seen:
+                    seen.add(key)
+                    unique_roots.append(r)
+            for root in unique_roots:
+                try:
+                    if p == root or p.is_relative_to(root):
+                        return True
+                except ValueError:
+                    continue
+            return False
         except Exception:
             return False
 

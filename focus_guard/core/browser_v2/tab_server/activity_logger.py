@@ -385,10 +385,10 @@ class ActivityLogger:
                     by_event_type = dict(cursor.fetchall())
                     
                     # By category
+                    category_where = where_clause + (" AND " if where_clause else "WHERE ") + "classification_category != ''"
                     cursor.execute(f"""
                         SELECT classification_category, COUNT(*) 
-                        FROM activity_log {where_clause}
-                        WHERE classification_category != ''
+                        FROM activity_log {category_where}
                         GROUP BY classification_category
                         ORDER BY COUNT(*) DESC
                     """, params)

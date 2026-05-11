@@ -355,6 +355,19 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+### [FR-022]
+- Date: 2026-05-10
+- Requested by: classification strategy discussion
+- Title: Hierarchical + profile-adaptive classification (future personalized policy model)
+- Priority: P2
+- Area: classification / policy / modeling
+- Problem: Flat labels (`GAMING` vs `ENTERTAINMENT`) can vary across rules vs LLM while policy intent is often shared; longer term, static global rules do not adapt to person-specific distraction patterns.
+- Proposed idea: Introduce a two-layer taxonomy (`category` + `family`, e.g. `GAMING -> ENTERTAINMENT`) in policy evaluation and logs; preserve educational carve-outs (e.g., violin lessons/performances). Post-MVP, explore profile-adaptive ranking/reinforcement approach using user feedback/overrides/history to tune block likelihood by person.
+- Why not now: MVP should first stabilize deterministic + live classification behavior and enforcement consistency; adaptive/reinforcement modeling adds data governance, safety, and explainability scope.
+- Earliest revisit day: after MVP stabilization and enough labeled behavior/override data is available
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)

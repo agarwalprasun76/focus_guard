@@ -110,6 +110,7 @@ Close gaps where **deployment enforcement mode** (e.g. Advisory) and **actual bl
    - Given rich `context` (title + URL with `q=`), classifier selection and **parsed category** behave as documented.
    - Given **minimal** context (URL only), behavior matches expectations (fallback rules or UNKNOWN).
    - YouTube classifier: same matrix with mocked LLM + rule path so blocking is not “all or nothing” from silent mis-routing.
+4. **Hierarchy policy + tests:** Treat **GAMING** and **music-video style content** as children of a broader **ENTERTAINMENT** family for blocking semantics, while keeping educational carve-outs explicit (e.g., violin performance/lesson can remain `EDUCATION` when metadata supports it). Add pytest assertions for both exact category and family-level policy behavior so `GAMING` vs `ENTERTAINMENT` label drift does not break enforcement intent.
 
 **Artifacts:** Short section in `MVP_SMOKE_TEST.md` or this file — “classification probe URLs” — for manual QA after the day.
 
