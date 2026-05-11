@@ -368,6 +368,27 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+### [FR-023]
+- Date: 2026-05-10
+- Requested by: Day 9 deployment model / future scale
+- Title: True multi-user Windows support (concurrent sessions + per-user policy)
+- Priority: P2
+- Area: install / Windows / tab_server / extension / domain config / admin_ui
+- Problem: MVP posture is **admin install + one designated monitored user** and **single interactive session** semantics. Multiple Windows user sessions, fast user switching, RDP, or “monitor several accounts on one PC” need explicit design; current storage, extension identity, and enforcement context are not guaranteed to be isolated or correct per session.
+- Proposed idea (scope to design before coding):
+  - **Identity:** stable per-user principal (SID or profile path) carried on every tab-server request and in logs; extensions bound to Windows user + browser profile.
+  - **Config split:** `deployment_config.json` remains machine-wide where appropriate; **domain rules, budgets, overrides, and enforcement preferences** become per monitored user (separate files or DB namespace keyed by user id).
+  - **Runtime topology:** clarify service (LocalSystem) vs per-user worker/tray for hooks; document who loads browser URL data and how multiple sessions are enumerated.
+  - **Tab server:** auth or channel binding so one user’s browser cannot drive another’s policy; optional per-listener port or tenant header.
+  - **Data stores:** partition SQLite paths (`ActivityLogger`, decision logs, caches) by user or use a single DB with `user_id` columns and migration plan.
+  - **Admin UI:** fleet-of-users-on-one-machine view; switching “who is being edited”; audit of cross-user leaks.
+  - **Installer:** optional “add monitored user” flow vs reinstall; ACL on ProgramData vs per-user LocalAppData mirrors (align with existing domain_config fallback).
+  - **Tests:** matrix for two local users (smoke + security: no policy bleed).
+- Why not now: Large product + security surface; MVP explicitly defers beyond `session_scope=single_interactive_session`.
+- Earliest revisit day: post-MVP after Day 9 posture is stable in the field
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)

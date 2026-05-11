@@ -223,6 +223,12 @@ class DeploymentConfig:
     run_at_startup: bool = True
     run_as_service: bool = True
     hide_from_user: bool = False  # If True, runs completely hidden
+
+    # Day 9 install posture metadata (explicit operator model)
+    deployment_posture_model: str = "admin_install_designated_monitored_user"
+    installer_account_name: str = ""
+    monitored_user_name: str = ""
+    session_scope: str = "single_interactive_session"
     
     # Security
     require_admin_to_stop: bool = True
@@ -306,6 +312,10 @@ class DeploymentConfig:
                 run_at_startup=data.get('run_at_startup', True),
                 run_as_service=data.get('run_as_service', True),
                 hide_from_user=data.get('hide_from_user', False),
+                deployment_posture_model=data.get('deployment_posture_model', 'admin_install_designated_monitored_user'),
+                installer_account_name=data.get('installer_account_name', ''),
+                monitored_user_name=data.get('monitored_user_name', ''),
+                session_scope=data.get('session_scope', 'single_interactive_session'),
                 require_admin_to_stop=data.get('require_admin_to_stop', True),
                 config_password_hash=data.get('config_password_hash', ''),
                 wizard_extension_acknowledged=data.get('wizard_extension_acknowledged', False),
@@ -344,6 +354,10 @@ class DeploymentConfig:
                 'run_at_startup': self.run_at_startup,
                 'run_as_service': self.run_as_service,
                 'hide_from_user': self.hide_from_user,
+                'deployment_posture_model': self.deployment_posture_model,
+                'installer_account_name': self.installer_account_name,
+                'monitored_user_name': self.monitored_user_name,
+                'session_scope': self.session_scope,
                 'require_admin_to_stop': self.require_admin_to_stop,
                 'config_password_hash': self.config_password_hash,
                 'wizard_extension_acknowledged': self.wizard_extension_acknowledged,
@@ -381,6 +395,18 @@ class DeploymentConfig:
         valid_modes = {m.value for m in EnforcementMode}
         if self.enforcement_mode not in valid_modes:
             errors.append(f"enforcement_mode must be one of {valid_modes}, got '{self.enforcement_mode}'")
+
+        valid_posture_models = {"admin_install_designated_monitored_user"}
+        if self.deployment_posture_model not in valid_posture_models:
+            errors.append(
+                f"deployment_posture_model must be one of {valid_posture_models}, got '{self.deployment_posture_model}'"
+            )
+
+        valid_session_scopes = {"single_interactive_session", "best_effort_multi_session"}
+        if self.session_scope not in valid_session_scopes:
+            errors.append(
+                f"session_scope must be one of {valid_session_scopes}, got '{self.session_scope}'"
+            )
         
         return len(errors) == 0, errors
     

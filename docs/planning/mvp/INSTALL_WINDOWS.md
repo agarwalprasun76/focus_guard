@@ -33,6 +33,19 @@ python -m focus_guard.main
 - Set admin password
 - Finish the wizard; when the tray has started (~2 seconds later), complete the **Finish setup** dialog (**Open Guardian Dashboard**, **Run connection check**). Retry the check briefly if endpoints are still waking up.
 
+## Supported deployment posture (Day 9 canonical model)
+
+Focus Guard MVP currently supports one explicit machine-user model:
+
+- **Installer run by admin:** install/setup is performed by a Windows administrator account.
+- **Designated monitored user:** one primary monitored user is configured per machine (`monitored_user_name` in `deployment_config.json`).
+- **Service/tray boundaries:**
+  - Service/background components enforce policy, persistence, and API endpoints.
+  - User-session monitoring/tray UX runs in the interactive user session.
+- **Known multi-session limit:** behavior is validated for a single active interactive session at a time. Multiple concurrent user sessions are best-effort and not a guaranteed enforcement model for MVP.
+
+This posture is persisted in deployment metadata (`deployment_posture_model`, `installer_account_name`, `monitored_user_name`, `session_scope`) for operator traceability.
+
 ### OpenAI / LLM (optional)
 
 For OpenAI-backed classifiers, the runtime resolves the key in this order (first match wins):
@@ -91,6 +104,15 @@ Recommended pass criteria:
 - Admin gateway health/meta checks are healthy
 - `overall_ready: True`
 - No critical recommendations about occupied ports or missing `uvicorn`
+
+### Operator machine-prep checklist (before first run)
+
+- [ ] Installation command is run from an **administrator** account.
+- [ ] Intended monitored account is known and entered/verified in config (`user_name` / `monitored_user_name`).
+- [ ] Browser extension is installed for the monitored user session (Chrome or Edge).
+- [ ] `%ProgramData%\FocusGuard\deployment_config.json` exists and includes posture metadata fields.
+- [ ] Service/tray starts successfully and local health endpoints respond (`58392`, `58393`).
+- [ ] If multiple simultaneous Windows sessions are expected, operator accepts MVP best-effort behavior and validates manually.
 
 ## Troubleshooting
 - If extension appears disconnected, verify tab server health endpoint first.

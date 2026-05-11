@@ -295,6 +295,12 @@ class FocusGuardInstaller:
             # Step 3: Save configuration
             print("  Saving configuration...")
             self.config.storage.data_directory = str(self.data_dir)
+            self.config.deployment_posture_model = "admin_install_designated_monitored_user"
+            self.config.installer_account_name = os.environ.get("USERNAME", self.config.installer_account_name)
+            if not self.config.monitored_user_name:
+                # Prefer explicit config user; fall back to current user for setup clarity.
+                self.config.monitored_user_name = self.config.user_name or os.environ.get("USERNAME", "")
+            self.config.session_scope = "single_interactive_session"
             config_path = self.data_dir / 'deployment_config.json'
             self.config.save(config_path)
             
