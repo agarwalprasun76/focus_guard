@@ -221,6 +221,39 @@ How you set env depends on how you start Focus Guard (user session, scheduled ta
 
 Details: `focus_guard/core/admin_gateway/config.py` and `INSTALL_WINDOWS.md` § Remote guardian access.
 
+### Where to set `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` on Windows
+
+The admin gateway reads this from the **process environment** when it starts (`os.environ`). It is **not** stored in `deployment_config.json` today — you must set a real Windows env var for the **same user account** (or **system-wide**) that launches Focus Guard, then **fully quit and restart** the app.
+
+**Option A — GUI (persistent, usual for tray / double-click runs)**  
+1. Press **Win**, type **environment variables**, open **Edit the system environment variables**.  
+2. **Advanced** tab → **Environment Variables…**  
+3. Under **User variables** (if Focus Guard runs as your logged-in user) or **System variables** (if a service / shared machine), click **New…**  
+   - **Variable name:** `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`  
+   - **Variable value:** `https://guardian.focus-guard.org` (your real origin; comma-separated list if you need several)  
+4. **OK** out of all dialogs.  
+5. **Quit Focus Guard completely** (tray icon exit) and start it again — **new** terminals and apps see the update; already-running Python will not.
+
+**Option B — PowerShell for one session (dev / testing)**  
+In the **same** window before `python -m focus_guard.main`:
+
+```powershell
+$env:FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS = "https://guardian.focus-guard.org"
+python -m focus_guard.main
+```
+
+This lasts only until that terminal closes.
+
+**Option C — Packaged / service install**  
+If Focus Guard is started by a **Windows service** or a **scheduled task**, set the variable on the **account that runs that service/task** (or as a **system** variable), using the **Services** snap-in / Task Scheduler **“Environment”** tab (Windows 11) or a wrapper script that exports vars then starts the exe. The rule is unchanged: the **child process** must inherit `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` at **start**.
+
+**Verify it is visible** (after setting, new PowerShell):
+
+```powershell
+[Environment]::GetEnvironmentVariable("FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS", "User")
+# or "Machine" for system-wide
+```
+
 ### Worked example: `guardian.focus-guard.org` (subdomain on your own zone)
 
 If your zone is **`focus-guard.org`** and your tunnel public hostname is **`guardian.focus-guard.org`** pointing to **`http://127.0.0.1:58393`**, then:
