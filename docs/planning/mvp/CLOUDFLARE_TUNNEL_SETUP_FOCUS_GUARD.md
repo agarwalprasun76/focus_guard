@@ -93,6 +93,7 @@ cloudflared --version
 
 - Cloudflare only publishes hostnames under **DNS zones attached to your Cloudflare account** — usually a **domain you registered** (at Cloudflare Registrar or anywhere else) with **nameservers pointed to Cloudflare**, or a subdomain of such a domain.
 - You **cannot** pick an arbitrary URL like `https://focus-guard.com` unless **you control that domain** (it is in your Cloudflare account and DNS resolves there). If `focus-guard.com` is already owned by someone else, you would need to **buy a different available domain** or use a **subdomain of a domain you already own**.
+- **Hyphens matter at registration:** `focus-guard.com` and `focusguard.com` are **different** domains. Availability of one does not imply the other. Always confirm with your **registrar’s search** (and optionally WHOIS) before paying — “looks available” in a browser error page is not enough.
 
 **Choosing a name that “matches” the app:**
 
