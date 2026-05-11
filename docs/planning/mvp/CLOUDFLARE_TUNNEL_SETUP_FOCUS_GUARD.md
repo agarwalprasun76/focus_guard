@@ -39,6 +39,29 @@ After install, confirm:
 cloudflared --version
 ```
 
+**If `cloudflared` is “not recognized” right after `winget install`:** the MSI updated **machine** `PATH`, but **this PowerShell window** still has the old environment. Do one of the following:
+
+1. **Easiest:** close the terminal (or restart Cursor / VS Code), open a **new** PowerShell window, then run `cloudflared --version` again.
+2. **Reload `PATH` in the current session** (then try `cloudflared` again):
+
+   ```powershell
+   $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+   ```
+
+3. **Call the binary by full path** (works even before PATH refreshes). Typical MSI locations — try in order:
+
+   ```powershell
+   & "${env:ProgramFiles(x86)}\cloudflared\cloudflared.exe" --version
+   & "$env:ProgramFiles\cloudflared\cloudflared.exe" --version
+   ```
+
+4. **Locate the exe** if install path changed:
+
+   ```powershell
+   winget show --id Cloudflare.cloudflared
+   Get-Command cloudflared.exe -ErrorAction SilentlyContinue | Select-Object Source
+   ```
+
 `cloudflared` on Windows does **not** auto-update; plan occasional manual updates.
 
 ---
