@@ -85,6 +85,27 @@ cloudflared --version
 
 ---
 
+## 1.5) Tunnel name vs public URL — can I use `https://focus-guard.com`?
+
+**Tunnel name** (e.g. `FocusGuard-admin`) is only an **internal label** in Cloudflare. It does **not** have to match the website address guardians type in the browser. You can rename tunnels later; what matters for Focus Guard is the **public hostname** you configure in the next steps.
+
+**Public hostname (the URL you will open):**
+
+- Cloudflare only publishes hostnames under **DNS zones attached to your Cloudflare account** — usually a **domain you registered** (at Cloudflare Registrar or anywhere else) with **nameservers pointed to Cloudflare**, or a subdomain of such a domain.
+- You **cannot** pick an arbitrary URL like `https://focus-guard.com` unless **you control that domain** (it is in your Cloudflare account and DNS resolves there). If `focus-guard.com` is already owned by someone else, you would need to **buy a different available domain** or use a **subdomain of a domain you already own**.
+
+**Choosing a name that “matches” the app:**
+
+| Approach | Example | Notes |
+|----------|---------|--------|
+| **Subdomain of a domain you already have** | `https://guardian.yourfamily.com` or `https://fg-admin.example.com` | Cheapest and clearest; no need for the word “FocusGuard” in the URL. |
+| **Register a new brand-style domain** | `https://focusguard.example` (if available at a registrar) | Costs money yearly; then add that zone to Cloudflare and create e.g. `https://admin.focusguard.example`. |
+| **Obscure hostname** | `https://a8f3-yourname.example.com` | Slightly less guessable; **not** a substitute for **Cloudflare Access** + strong admin password. |
+
+**What you set in Focus Guard:** `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` must be the **exact** origin you use (e.g. `https://guardian.yourfamily.com` — scheme + host, typically **no trailing slash** in the env value; the path `/admin` is separate in the browser).
+
+---
+
 ## 2) Create a tunnel in Cloudflare Zero Trust (dashboard)
 
 1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com/).
