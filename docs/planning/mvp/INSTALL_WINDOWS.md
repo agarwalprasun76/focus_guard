@@ -81,6 +81,8 @@ Concrete copy-paste runbooks evolve in **Day 12** (`MVP_DAY12_EXECUTION_PLAN.md`
 3. When the SPA is loaded from **any hostname other than** `localhost` / `127.0.0.1` on port `58393`, set **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** to a comma-separated list of allowed **`Origin`** values (scheme + host + port, **no trailing path** — e.g. `https://your-tunnel-host.example.com`).
 4. Optional bind overrides (`FOCUS_GUARD_ADMIN_GATEWAY_HOST` / `_PORT`): default remains loopback-only. Changing `HOST` away from **`127.0.0.1`** logs a warning and belongs only in deliberate LAN/VPN topologies paired with firewall review — **still** avoid naked Internet port-forward unless you explicitly accept ADR‑documented risk.
 
+**Multiple guardians:** two people editing rules at once can still hit **last-write-wins** races until product support lands — see **`FEATURE_REQUESTS_PARKING_LOT.md` [FR-029]** and `ADR_001_REMOTE_ADMIN_ACCESS.md` (Option 3 notes). Until then: **refresh the settings view before saving** if another guardian may have changed policy, or coordinate a single editor for large edits.
+
 Related environment variables live in **`focus_guard/core/admin_gateway/config.py`** (module docstring).
 
 ## 6) MVP smoke checks (minimum)

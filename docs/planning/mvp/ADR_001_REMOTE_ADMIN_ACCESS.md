@@ -40,6 +40,8 @@ Assumptions: admin password is set; bearer tokens are short-lived; origin checks
 - **Pros:** **No inbound firewall pinholes** by default; service stays localhost-bound; HTTPS termination + optional SSO at edge; aligns with Week 2 “no raw public port” guardrail when done correctly (outbound-only tunnel).
 - **Cons:** Depends on vendor/process for tunnel + Access policies; operational steps for keys/domains unless using quick tunnels (which need extra care — see INSTALL).
 - **Cost:** Typical free/low tiers suffice for guardians.
+- **Reliability + latency (acceptance for “canonical”):** This path is endorsed **only when** operators can keep the tunnel process **stable** (restart policy, watchdog) and accept added **RTT** for each dashboard API call (typically one regional hop + vendor edge). Policy truth remains **on-device** via tab server + local files; the tunnel does not add a second source of truth. If latency or drops become painful, prefer **mesh VPN to the PC** (still no raw public listener) or localhost-only for heavy editing sessions. Operational guidance belongs in the Day 12 runbook.
+- **Multi-guardian consistency:** Several guardians may use **separate browsers/sessions** (same tunnel URL or different paths) against the **same** machine. Without **concurrency control** and **fresh-state** semantics, **last-write-wins** and **stale tabs** can cause one guardian to overwrite another’s rule change without ever having seen it. That is a **product gap**, not solved by the tunnel alone. Mitigations are tracked in parking lot **[FR-029]** (revision tokens / conflict detection / optional live refresh).
 
 ### 4) Hosted relay / SaaS control plane
 
@@ -51,6 +53,8 @@ Assumptions: admin password is set; bearer tokens are short-lived; origin checks
 
 **Canonical MVP+ remote profile:** **Option 3 — outbound authenticated tunnel terminating on `127.0.0.1:58393`**, with **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** updated to include the **browser `Origin`** of the SPA (HTTPS tunnel hostname).
 
+**Stakeholder alignment:** Option 3 remains canonical **provided** tunnel **reliability** (process uptime, reconnect) and **latency** (acceptable RTT for interactive rule editing) are validated in the field; mesh/VPN or localhost-heavy sessions remain valid mitigations. **Multi-guardian** simultaneous editing risks are acknowledged; see **[FR-029]** for planned product follow-up (not a Week 2 blocker for declaring the transport architecture).
+
 **Operational fallback when tunnel is undesirable:** Option 2 only on networks you trust — **combined with tight Windows Firewall rules**, strong admin password rotation, **no** unconditional consumer port-forward — or prefer **VPN / mesh that does not advertise the gateway to the whole Internet** before raw exposure.
 
 Localhost-only (1) remains the **production default posture** when remote access is not needed.
@@ -61,7 +65,7 @@ Localhost-only (1) remains the **production default posture** when remote access
 - CORS/origin guidance MUST mention tunnel/hosted UI origins.
 - Day 12 runbook SHOULD give copy-paste steps for one tunnel stack (narrowed practical guide).
 
-**Follow-up product scope (parked, not MVP Week 2):** `FEATURE_REQUESTS_PARKING_LOT.md` **[FR-024]**–**[FR-028]** — external IdP for admin, login hardening + audit trail, SPA/runtime URL ergonomics for tunnels, secured split tab-server topology, fleet / hosted control plane.
+**Follow-up product scope (parked, not MVP Week 2):** `FEATURE_REQUESTS_PARKING_LOT.md` **[FR-024]**–**[FR-029]** — external IdP for admin, login hardening + audit trail, SPA/runtime URL ergonomics for tunnels, secured split tab-server topology, fleet / hosted control plane, **multi-guardian rule coherence / conflict avoidance**.
 
 ## Links
 

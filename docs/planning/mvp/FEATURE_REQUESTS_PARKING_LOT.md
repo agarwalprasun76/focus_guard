@@ -454,6 +454,24 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+### [FR-029]
+- Date: 2026-05-10
+- Requested by: ADR-001 Option 3 alignment + multi-guardian operational need
+- Title: Multi-guardian rule coherence — shared fresh state, optimistic concurrency, conflict UX
+- Priority: P2
+- Area: admin_gateway / tab_server / admin_ui / domain_config / settings APIs
+- Problem: **Two or more guardians** (different browsers, tabs, or devices via the same tunnel or LAN) can read **stale** domain/enforcement/budget/exception state, then **save** — producing **lost updates** or “undoing” another guardian’s change without malicious intent. Remote tunnels **increase perceived races** (higher latency, longer-lived SPA tabs). Today there is no universal **revision / ETag** contract on mutating settings APIs and no **push** to all open admin sessions when tab server or `domain_config` changes from another client.
+- Proposed idea (phased):
+  1. **Read path:** expose a monotonic **`rules_revision`** (or per-resource ETag) on tab-server + gateway aggregates for domain list, enforcement, budgets, exceptions snapshot — cheap to compute (file mtime + hash, or SQLite sequence).
+  2. **Write path:** require **`If-Match`** / body field **`expected_revision`** on mutating POST/PUT; on mismatch return **409 Conflict** with a body such as `current_revision` plus optional `diff_summary` so admin UI can **reload + merge** or show a three-way-style resolution for power users.
+  3. **UX:** admin SPA **polls** revision every N seconds while settings pages are open; optional **SSE or WebSocket** “`config_changed`” event from gateway for lower latency (bounded fan-out on one machine).
+  4. **Exceptions / time windows:** same revision scope or sub-resource generation counters so rapid grant/revoke from two guardians does not silently drop one row.
+  5. **Docs until shipped:** short operator playbook — “one editor at a time” / refresh before save — linked from `INSTALL_WINDOWS.md` remote section.
+- Why not now: Touches many write endpoints and admin_ui forms; needs contract tests and backward compatibility for older clients (revision optional → warn-only mode).
+- Earliest revisit day: after Day 12 tunnel runbook; prioritize if multi-household or co-parent pilots report confusion
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)
