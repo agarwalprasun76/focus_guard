@@ -65,7 +65,7 @@ Localhost-only (1) remains the **production default posture** when remote access
 - CORS/origin guidance MUST mention tunnel/hosted UI origins.
 - Day 12 runbook SHOULD give copy-paste steps for one tunnel stack (narrowed practical guide).
 
-**Follow-up product scope (parked, not MVP Week 2):** `FEATURE_REQUESTS_PARKING_LOT.md` **[FR-024]**–**[FR-029]** — external IdP for admin, login hardening + audit trail, SPA/runtime URL ergonomics for tunnels, secured split tab-server topology, fleet / hosted control plane, **multi-guardian rule coherence / conflict avoidance**.
+**Follow-up product scope (parked, not MVP Week 2):** `FEATURE_REQUESTS_PARKING_LOT.md` **[FR-024]**–**[FR-030]** — external IdP for admin, login hardening + audit trail, SPA/runtime URL ergonomics for tunnels, secured split tab-server topology, fleet / hosted control plane, **multi-guardian rule coherence / conflict avoidance**, **optional in-app `cloudflared` assistant** (download / service lifecycle).
 
 ## Links
 

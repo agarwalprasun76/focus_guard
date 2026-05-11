@@ -74,6 +74,14 @@ Operators often need **rules, exceptions, enforcement mode, budgets, and monitor
 
 **Canonical remote profile:** run the admin gateway on **`127.0.0.1`** (default) and use an **outbound HTTPS tunnel** (e.g. **Cloudflare Tunnel + Access**, or an equivalent “reverse proxy / edge auth” stack) whose **origin** forwards to `http://127.0.0.1:58393`. The tunnel terminator handles TLS; Focus Guard stays off the raw public TCP port pattern.
 
+#### `cloudflared` and the Focus Guard installer (today vs future)
+
+**Today:** the Focus Guard application **does not** download, bundle, or register **Cloudflare `cloudflared`**. You install it yourself (e.g. `winget install --id Cloudflare.cloudflared`) and complete tunnel steps in the **Cloudflare Zero Trust** dashboard. Focus Guard still cannot create your Cloudflare account, domain, tunnel token, or Access policy for you — those remain operator steps.
+
+**Why bundling is deferred:** separate **release cadence** and security patches for Cloudflare’s binary; **Administrator** elevation for `cloudflared service install`; **secret** handling (tunnel token) in-app; risk of **conflicting** with IT-managed `cloudflared` already on the PC; **license/redistribution** and installer size; support burden when tunnel issues are indistinguishable from app issues.
+
+**Future option:** optional wizard / settings flow to **assist** setup is tracked as **`FEATURE_REQUESTS_PARKING_LOT.md` [FR-030]** (e.g. detect `cloudflared` on PATH, offer one-click download of the **official** Windows build with checksum verification, optional “paste token + install service” with explicit uninstall hook — still with Cloudflare dashboard for hostname and Access).
+
 #### Day 12 — Practical remote login runbook (out-of-network)
 
 **Step-by-step Cloudflare setup (vendor UI changes over time):**  

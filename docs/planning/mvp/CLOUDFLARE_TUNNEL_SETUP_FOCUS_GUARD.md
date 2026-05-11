@@ -5,6 +5,12 @@ This guide assumes the **monitored PC** runs Focus Guard and the admin gateway o
 **Official reference (kept current by Cloudflare):**  
 [Create a Cloudflare Tunnel · Cloudflare One docs](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/)
 
+### Is `cloudflared` installed by Focus Guard?
+
+**No — not in the current MVP build.** You install `cloudflared` separately (see §1 below). The Focus Guard installer does **not** bundle Cloudflare’s connector; tunnel **tokens**, **DNS hostnames**, and **Access** policies are always created in your **Cloudflare** account first.
+
+If we later add an **optional assistant** inside Focus Guard (download official binary, health check, maybe service install), that work is tracked as **`FEATURE_REQUESTS_PARKING_LOT.md` [FR-030]** and will be called out in `INSTALL_WINDOWS.md` when shipped.
+
 ---
 
 ## 0) Prerequisites

@@ -472,6 +472,25 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+### [FR-030]
+- Date: 2026-05-10
+- Requested by: operator UX — “install Cloudflare as part of Focus Guard”
+- Title: Optional in-app assistant for Cloudflare Tunnel (`cloudflared`) — download, version, service lifecycle
+- Priority: P3
+- Area: installer / wizard / deployment / docs / Windows service
+- Problem: Manual **`winget`** or download + **elevated** `cloudflared service install <token>` + dashboard steps is friction for non-technical guardians. Asking whether Focus Guard should **ship** or **install** `cloudflared` automatically is reasonable; doing it wrong creates **duplicate services**, **stale binaries**, **token leakage** in logs/UI, and **support** tickets that mix tunnel failures with app failures.
+- Proposed idea (non-exhaustive; design before coding):
+  1. **Detect:** on Settings / Remote page, probe `cloudflared --version` on `PATH` and under a well-known vendor install path.
+  2. **Download assist (no fork):** optional button “Download official `cloudflared`” → fetch from Cloudflare’s published release URL over HTTPS, verify **SHA-256** against a pinned manifest shipped with Focus Guard (manifest updated per Focus Guard release), write to e.g. `%ProgramData%\FocusGuard\tools\cloudflared.exe` (not replacing system-wide install without consent).
+  3. **Service install assist:** wizard step “Paste tunnel install token” → run elevated helper **once** to register Windows service (clear UX: requires Admin UAC); store **only** a flag “tunnel managed by Focus Guard” for uninstall cleanup — avoid persisting raw token on disk if Cloudflare’s model allows token rotation via dashboard-only re-paste.
+  4. **Config surface:** still require operator to create **public hostname → `http://127.0.0.1:58393`** in Zero Trust (or deep-link to Cloudflare doc); optionally deep-link with query params if Cloudflare ever supports it.
+  5. **Uninstall:** if FG registered the service, offer “Remove Focus Guard–managed tunnel service” on uninstall or settings.
+  6. **IT collision:** if non-FG `cloudflared` service already exists, show **non-destructive** message and link to manual doc.
+- Why not now: MVP explicitly keeps tunnel **out-of-band**; needs legal review of redistributing/drop-downloading Cloudflare binary, elevation UX, and automated tests in CI without real tokens.
+- Earliest revisit day: after several pilot installs request “one button tunnel”
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)

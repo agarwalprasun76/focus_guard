@@ -33,6 +33,7 @@ Close **Week 2** workstreams from `MVP_SPRINT_MASTER_PLAN_Week2.md` with **docum
 | Multi-guardian rule races (revision / 409) | **FR-029** |
 | External IdP, audit trail, SPA base URL, TLS split-host, fleet plane | **FR-024**–**FR-028** |
 | True multi-user Windows | **FR-023** |
+| Bundled / wizard-driven `cloudflared` install | **FR-030** |
 
 ## Optional command evidence (fill in when run)
 
