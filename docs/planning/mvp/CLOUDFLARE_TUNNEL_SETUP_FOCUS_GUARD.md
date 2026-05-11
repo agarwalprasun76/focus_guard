@@ -273,11 +273,39 @@ Then only identities passing Access reach your tunnel; Focus Guard’s own passw
 
 | Issue | What to check |
 |--------|----------------|
+| **`DNS_PROBE_FINISHED_NXDOMAIN`** / “site can’t be reached” (DNS) | The public hostname has **no DNS record** the world can see, or **`focus-guard.org` is not using Cloudflare nameservers**. See **NXDOMAIN** steps below. |
 | **502** / bad gateway | Focus Guard not running; wrong service URL (must be `127.0.0.1:58393`); `cloudflared` service stopped. |
 | **403** `origin not allowed` | Set `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` exactly to `https://guardian.example.com` (no path); restart app. |
 | **SSL errors** | Browser must use **https** to the Cloudflare hostname; do not point the tunnel at `https://127.0.0.1:58393`. |
 | Tunnel “down” in dashboard | PC asleep, firewall blocking outbound QUIC/HTTPS, or token revoked — reinstall connector with new token if needed. |
 | **Quick Tunnel** (`trycloudflare.com`) | Hostname changes often → you must update `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` each time. Prefer a **named tunnel + your domain**. |
+
+### `DNS_PROBE_FINISHED_NXDOMAIN` (Chrome) — DNS does not know `guardian.focus-guard.org`
+
+NXDOMAIN means **no address record** was returned for that name. Fix DNS **before** Focus Guard or the tunnel connector can matter.
+
+1. **Confirm the zone is on Cloudflare**  
+   Dashboard → **Websites** (or **Domains**) → **`focus-guard.org`** appears and status is **Active** (not “Pending nameserver update” forever).
+
+2. **Nameservers at your registrar**  
+   At whoever you **bought** `focus-guard.org`, the domain must use the **two Cloudflare nameservers** shown under your zone (e.g. `ada.ns.cloudflare.com`, `bob.ns.cloudflare.com`). If you still see the **registrar’s default** nameservers, DNS for `guardian.focus-guard.org` will **not** come from Cloudflare until you change them (can take minutes to 48 hours).
+
+3. **Tunnel public hostname actually created the DNS name**  
+   **Zero Trust** → **Networks** → **Connectors** → **Cloudflare Tunnels** → your tunnel → **Public hostnames** → you should see **`guardian.focus-guard.org`** (or Subdomain `guardian`, Domain `focus-guard.org`) with service **`http://127.0.0.1:58393`**. **Save** if you only drafted it.
+
+4. **DNS tab record**  
+   **Websites** → **`focus-guard.org`** → **DNS** → **Records**. For a tunnel hostname you should normally see a **CNAME** for `guardian` targeting something like `…cfargotunnel.com` (proxy **on** / orange cloud, depending on UI). If **`guardian` is missing**, add/fix the public hostname in the tunnel UI again (it usually inserts the record).
+
+5. **Test from PowerShell** (any PC, after a few minutes):
+
+   ```powershell
+   nslookup guardian.focus-guard.org 1.1.1.1
+   ```
+
+   You want a **non-error** answer (CNAME chain or A/AAAA to Cloudflare), not `NXDOMAIN` or “can’t find.”
+
+6. **Typos**  
+   `guardian` vs `gardian`, `focus-guard.org` vs `focusguard.org` — must match everywhere (tunnel, DNS, browser, `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`).
 
 ---
 
