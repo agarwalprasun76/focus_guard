@@ -300,6 +300,26 @@ In Zero Trust:
 
 Then only identities passing Access reach your tunnel; Focus Guard’s own password remains a second layer (defense in depth). Long-term IdP inside the app is **FR-024**.
 
+For Access policy examples and UI flow, see Cloudflare’s docs: [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/).
+
+---
+
+## 8) Tunnel **Healthy** and the admin UI loads — what’s left on Cloudflare?
+
+If **Zero Trust → Tunnels → FocusGuard-admin** shows **Healthy**, the connector is online and your **public hostname** (e.g. `https://guardian.focus-guard.org/admin`) loads **FocusGuard Admin UI**, then **connectivity is done**. You do **not** have to add another “enable tunnel” switch.
+
+**Recommended next steps (Cloudflare dashboard only):**
+
+| Priority | Where | What to do |
+|----------|--------|------------|
+| **High** | **Zero Trust → Access → Applications** | Add a **self-hosted** application for **`guardian.focus-guard.org`** so only trusted identities (e.g. your Google / GitHub / email list) can reach the URL **before** the Focus Guard login page. This is the main security layer you still want. |
+| **Sanity** | **Zero Trust → Tunnels → FocusGuard-admin → Public hostnames** | Confirm **`guardian.focus-guard.org`** points to **`http://127.0.0.1:58393`** (HTTP). If you ever change the local admin port, update this row. |
+| **Sanity** | **Websites → `focus-guard.org` → DNS** | Leave the tunnel’s **`guardian` CNAME** (orange-cloud / proxied) in place; don’t delete it while the route is in use. |
+| **Maintenance** | The **NucBox** PC | Periodically **`winget upgrade Cloudflare.cloudflared`** (or reinstall from Cloudflare) so `cloudflared` stays supported. |
+| **Optional** | **Security → WAF / Firewall rules** | Later you can add geo or challenge rules for `guardian.focus-guard.org`; test carefully so you don’t lock yourself out. |
+
+**Nothing else is required** on Cloudflare for remote admin to function; **Access** is the main follow-up once the UI is reachable.
+
 ---
 
 ## Troubleshooting
