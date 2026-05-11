@@ -221,6 +221,22 @@ How you set env depends on how you start Focus Guard (user session, scheduled ta
 
 Details: `focus_guard/core/admin_gateway/config.py` and `INSTALL_WINDOWS.md` § Remote guardian access.
 
+### Worked example: `guardian.focus-guard.org` (subdomain on your own zone)
+
+If your zone is **`focus-guard.org`** and your tunnel public hostname is **`guardian.focus-guard.org`** pointing to **`http://127.0.0.1:58393`**, then:
+
+| Item | Value |
+|------|--------|
+| **Guardian opens** | `https://guardian.focus-guard.org/admin` |
+| **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** | `https://guardian.focus-guard.org` (scheme + host **only** — no `/admin`, no trailing path) |
+| **Not the same origin** | `https://www.guardian.focus-guard.org`, `https://focus-guard.org`, or `http://…` — if you use those in the browser, add each as a comma-separated origin or pick one canonical URL. |
+
+Smoke probe (from a machine that can reach the URL):
+
+```powershell
+python scripts/admin_gateway_smoke.py --password "<ADMIN_PASSWORD>" --base-url https://guardian.focus-guard.org
+```
+
 ---
 
 ## 6) Verify from another network
