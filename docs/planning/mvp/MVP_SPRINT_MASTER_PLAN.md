@@ -101,6 +101,8 @@ Calendar-style **Day 1–5** execution docs absorbed most of items **1–8** abo
 
 **Sprint closure (Day 7):** `MVP_DAY7_HANDOFF.md` + **`MVP_DAY7_EXECUTION_PLAN.md` § Resume after sidetrack** — engineering RC is closed; use the resume section for any last optional gates. Manual `MVP_SMOKE_TEST.md` can still run anytime — see `MVP_DAY6_EXECUTION_PLAN.md` § Deferring manual smoke. **Product next:** post-MVP backlog in `FEATURE_REQUESTS_PARKING_LOT.md`.
 
+**Week 2 (post-RC) engineering track:** `docs/planning/mvp/MVP_SPRINT_MASTER_PLAN_Week2.md` — closure summary and evidence pointers in `docs/planning/mvp/MVP_WEEK2_HANDOFF.md` (remote runbook Day 12, metrics Day 10, install posture Day 9, setup/extension Day 8).
+
 ## Definition of Done
 - Critical tab_server tests green
 - Settings editable from guardian web UI

@@ -2,6 +2,7 @@
 
 Usage:
     python scripts/admin_gateway_smoke.py --password <ADMIN_PASSWORD>
+    python scripts/admin_gateway_smoke.py --password <ADMIN_PASSWORD> --base-url https://guardian.example.com
 """
 
 from __future__ import annotations
@@ -11,11 +12,17 @@ import json
 from urllib import error, request
 
 
-BASE_URL = "http://127.0.0.1:58393"
+DEFAULT_BASE_URL = "http://127.0.0.1:58393"
 
 
-def _call(method: str, path: str, token: str | None = None, payload: dict | None = None):
-    url = f"{BASE_URL}{path}"
+def _call(
+    base_url: str,
+    method: str,
+    path: str,
+    token: str | None = None,
+    payload: dict | None = None,
+):
+    url = f"{base_url.rstrip('/')}{path}"
     data = None
     headers = {"Content-Type": "application/json"}
     if token:
@@ -37,14 +44,25 @@ def _call(method: str, path: str, token: str | None = None, payload: dict | None
 def main() -> int:
     parser = argparse.ArgumentParser(description="Admin gateway smoke helper")
     parser.add_argument("--password", required=True, help="Admin password configured in deployment config")
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help=f"Gateway root URL (default: {DEFAULT_BASE_URL}). Use your tunnel https://hostname for remote checks.",
+    )
     args = parser.parse_args()
+    base = args.base_url.strip().rstrip("/")
 
     print("[1] Health")
-    status, body = _call("GET", "/admin/health")
+    status, body = _call(base, "GET", "/admin/health")
     print(status, body)
 
     print("[2] Login")
-    status, body = _call("POST", "/admin/api/v1/auth/login", payload={"username": "admin", "password": args.password})
+    status, body = _call(
+        base,
+        "POST",
+        "/admin/api/v1/auth/login",
+        payload={"username": "admin", "password": args.password},
+    )
     print(status, body)
     token = body.get("token") if status == 200 else None
     if not token:
@@ -52,11 +70,12 @@ def main() -> int:
         return 1
 
     print("[3] Dashboard")
-    status, body = _call("GET", "/admin/api/v1/dashboard?device_id=default-device", token=token)
+    status, body = _call(base, "GET", "/admin/api/v1/dashboard?device_id=default-device", token=token)
     print(status, list(body.keys()) if isinstance(body, dict) else body)
 
     print("[4] Exceptions create/list/revoke")
     status, created = _call(
+        base,
         "POST",
         "/admin/api/v1/exceptions",
         token=token,
@@ -64,16 +83,16 @@ def main() -> int:
     )
     print("create", status, created)
 
-    status, listed = _call("GET", "/admin/api/v1/exceptions?status=all&limit=50&offset=0", token=token)
+    status, listed = _call(base, "GET", "/admin/api/v1/exceptions?status=all&limit=50&offset=0", token=token)
     print("list", status, {"total": listed.get("total") if isinstance(listed, dict) else None})
 
     exception_id = created.get("id") if isinstance(created, dict) else None
     if exception_id:
-        status, revoked = _call("DELETE", f"/admin/api/v1/exceptions/{exception_id}", token=token)
+        status, revoked = _call(base, "DELETE", f"/admin/api/v1/exceptions/{exception_id}", token=token)
         print("revoke", status, revoked)
 
     print("[5] Devices list + enforcement update")
-    status, devices = _call("GET", "/admin/api/v1/devices", token=token)
+    status, devices = _call(base, "GET", "/admin/api/v1/devices", token=token)
     print("devices", status, devices)
 
     device_id = "default-device"
@@ -81,6 +100,7 @@ def main() -> int:
         device_id = devices["devices"][0].get("id", device_id)
 
     status, enforcement = _call(
+        base,
         "PUT",
         f"/admin/api/v1/devices/{device_id}/enforcement",
         token=token,
@@ -89,7 +109,7 @@ def main() -> int:
     print("enforcement", status, enforcement)
 
     print("[6] Logout")
-    status, body = _call("POST", "/admin/api/v1/auth/logout", token=token)
+    status, body = _call(base, "POST", "/admin/api/v1/auth/logout", token=token)
     print(status, body)
 
     return 0

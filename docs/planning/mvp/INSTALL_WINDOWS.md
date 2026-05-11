@@ -74,12 +74,62 @@ Operators often need **rules, exceptions, enforcement mode, budgets, and monitor
 
 **Canonical remote profile:** run the admin gateway on **`127.0.0.1`** (default) and use an **outbound HTTPS tunnel** (e.g. **Cloudflare Tunnel + Access**, or an equivalent “reverse proxy / edge auth” stack) whose **origin** forwards to `http://127.0.0.1:58393`. The tunnel terminator handles TLS; Focus Guard stays off the raw public TCP port pattern.
 
-Concrete copy-paste runbooks evolve in **Day 12** (`MVP_DAY12_EXECUTION_PLAN.md`). Until then:
+#### Day 12 — Practical remote login runbook (out-of-network)
+
+**Security guardrails (read first)**
 
 1. **Do not** open a generic “DMZ / forward port **58393**” rule on a home router as your first step.
-2. Keep a **strong, unique wizard admin password**; treat dashboard access as administrative control over blocking and data.
-3. When the SPA is loaded from **any hostname other than** `localhost` / `127.0.0.1` on port `58393`, set **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** to a comma-separated list of allowed **`Origin`** values (scheme + host + port, **no trailing path** — e.g. `https://your-tunnel-host.example.com`).
-4. Optional bind overrides (`FOCUS_GUARD_ADMIN_GATEWAY_HOST` / `_PORT`): default remains loopback-only. Changing `HOST` away from **`127.0.0.1`** logs a warning and belongs only in deliberate LAN/VPN topologies paired with firewall review — **still** avoid naked Internet port-forward unless you explicitly accept ADR‑documented risk.
+2. Keep a **strong, unique wizard admin password**; rotate if shared with anyone you no longer trust. Dashboard access equals **policy + monitoring control** over the monitored machine.
+3. **Origin / CORS:** the admin SPA only talks to the gateway when the browser **`Origin`** is allow-listed. When the UI is opened at an HTTPS hostname (tunnel), set **`FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`** to that origin exactly (scheme + host + port, **no path**), e.g. `https://guardian.example.com`. Multiple origins = comma-separated list. See `focus_guard/core/admin_gateway/config.py`.
+4. **Session tokens:** treat gateway login like any sensitive app — log out on shared PCs; short TTL is configured on the gateway (`auth_token_ttl_seconds` in `AdminGatewayConfig`).
+5. Optional bind overrides (`FOCUS_GUARD_ADMIN_GATEWAY_HOST` / `_PORT`): default remains loopback-only. Non-loopback bind belongs only with **Windows Firewall** scoping and ADR‑reviewed threat model — **still** avoid naked Internet port-forward.
+
+**Recommended path: Cloudflare Tunnel (`cloudflared`) → localhost gateway**
+
+High-level steps (follow vendor docs for install/auth details — links change less often than CLI flags):
+
+1. On the **monitored PC** (where Focus Guard runs), confirm locally: `http://127.0.0.1:58393/admin/health` returns OK.
+2. Install **Cloudflare Tunnel** (`cloudflared`) for Windows from Cloudflare’s documentation.
+3. Create a **named tunnel** and a **DNS hostname** (e.g. `guardian.example.com`) you control in Cloudflare.
+4. Configure tunnel ingress so that hostname’s traffic forwards to **`http://127.0.0.1:58393`** (not `https` — the gateway speaks HTTP on loopback).
+5. Run `cloudflared` as a **Windows service** or an always-on scheduled task so reconnect happens after reboot/sleep.
+6. Set environment for the Focus Guard process (service wrapper, tray parent, or user session — however you start the app):
+
+   `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS=https://guardian.example.com`
+
+   Use the **exact** URL guardians type in the browser (include `https`, no trailing slash in the origin sense). Restart Focus Guard after changing env.
+7. **Optional but strongly recommended:** add **Cloudflare Zero Trust Access** (or another IdP) in front of the tunnel hostname so random visitors never see the login page without SSO/MFA. Productized IdP inside the gateway remains **[FR-024]**.
+8. From a **different network** (e.g. cellular), open `https://guardian.example.com/admin`, log in with the wizard admin password, and confirm dashboard + settings load.
+
+**Latency / reliability:** expect one extra network hop per API call. If the tunnel process stops, remote access stops — use service auto-restart and monitor `cloudflared` logs. For heavy rule-editing sessions, **RDP to the PC + localhost admin** (below) can feel snappier.
+
+**Operational fallback paths**
+
+| Fallback | When to use | Notes |
+|----------|-------------|--------|
+| **Remote Desktop / Chrome Remote Desktop** to the monitored PC, then `http://127.0.0.1:58393/admin` | Tunnel not ready yet; one-time support | No new exposure; higher friction. Works with existing localhost CORS defaults. |
+| **Mesh VPN (Tailscale, etc.) + stay on localhost** | You already mesh the PC; still want zero inbound ports | Remote guardian uses RDP/screen share over mesh, or runs tunnel **only on the mesh interface** — do not improvise `0.0.0.0:58393` on coffee-shop Wi‑Fi. |
+| **Trusted LAN only** | Same house, same router, no tunnel vendor | ADR‑001 Option 2 — bind + **firewall‑scoped** LAN rules if you must; never the default “port forward to the world” pattern. |
+
+**Troubleshooting (remote)**
+
+| Symptom | Likely cause | What to try |
+|---------|----------------|-------------|
+| Browser console: CORS / blocked by ORB | `Origin` not allow-listed | Set `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` to the **browser address bar** origin; restart app. |
+| HTTP **403** `origin not allowed` | Same as above | Include scheme + host + port exactly. |
+| Tunnel **502** / empty response | Focus Guard not running or wrong ingress port | Confirm `58393` locally; tunnel service running. |
+| Login fails with correct password | Wrong machine / stale deployment | Confirm you tunnel to the intended PC; check `%ProgramData%\FocusGuard\deployment_config.json`. |
+| Quick tunnel URL changes every run | Ephemeral hostname | Either use a **named tunnel + fixed DNS**, or update `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` each time — prefer stable hostname. |
+
+**Automated API probe (same machine or via tunnel URL)**
+
+From a shell with the app reachable:
+
+```powershell
+python scripts/admin_gateway_smoke.py --password "<ADMIN_PASSWORD>"
+```
+
+Optional: `--base-url https://guardian.example.com` to hit the public hostname (tunnel must already route to this PC’s gateway).
 
 **Multiple guardians:** two people editing rules at once can still hit **last-write-wins** races until product support lands — see **`FEATURE_REQUESTS_PARKING_LOT.md` [FR-029]** and `ADR_001_REMOTE_ADMIN_ACCESS.md` (Option 3 notes). Until then: **refresh the settings view before saving** if another guardian may have changed policy, or coordinate a single editor for large edits.
 

@@ -148,12 +148,14 @@ Definition of done:
 
 | Workstream | Status | Notes |
 |------------|--------|-------|
-| A Setup validation gate | Planned | |
-| B Extension store flow hardening | Planned | |
-| C Admin install + designated user model | Planned | |
-| D Metrics historical query contract | Planned | |
+| A Setup validation gate | Done | Day 8 implementation + docs; human re-validation per `MVP_DAY8_EXECUTION_PLAN.md` § Validation checklist before strict field sign-off |
+| B Extension store flow hardening | Done | Day 8 store IDs / copy; `INSTALL_WINDOWS.md` |
+| C Admin install + designated user model | Done | Day 9 posture + tests + install checklist |
+| D Metrics historical query contract | Done | Day 10 activity UTC/range + dashboard alignment + `MVP_TEST_MATRIX.md` |
 | E Hosted/remote architecture decision | Done | `docs/planning/mvp/ADR_001_REMOTE_ADMIN_ACCESS.md`; `INSTALL_WINDOWS.md` § Remote guardian access; env-driven binds/origins (`FOCUS_GUARD_ADMIN_*` in `focus_guard/core/admin_gateway/config.py`; `focus_guard/main.py` uses same config for in-process gateway) |
-| F Low-cost remote login runbook | Planned | Execute Day 12; ties ADR‑001 to copy‑paste tunnel steps + smoke checklist |
+| F Low-cost remote login runbook | Done | Day 12: `INSTALL_WINDOWS.md` § Day 12 runbook; `MVP_SMOKE_TEST.md` § J–K; `scripts/admin_gateway_smoke.py --base-url`; handoff `MVP_WEEK2_HANDOFF.md` |
+
+**Week 2 narrative handoff:** `docs/planning/mvp/MVP_WEEK2_HANDOFF.md`
 
 ## Day-by-day execution plans
 

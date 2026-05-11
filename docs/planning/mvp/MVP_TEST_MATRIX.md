@@ -100,6 +100,7 @@ Specs of interest:
 | Helper | Command | Needs |
 |--------|---------|--------|
 | Admin gateway API walkthrough | `python scripts/admin_gateway_smoke.py --password <ADMIN_PASSWORD>` | App + gateway on `58393` |
+| Admin gateway via tunnel hostname | `python scripts/admin_gateway_smoke.py --password <ADMIN_PASSWORD> --base-url https://<hostname>` | Tunnel routes to this PC’s gateway; `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` includes tunnel `Origin` if using browser from another profile |
 | Tab + admin HTTP only | `scripts/mvp_smoke.ps1` | Tab server + gateway |
 
 ---

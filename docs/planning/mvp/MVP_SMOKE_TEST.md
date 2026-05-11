@@ -50,6 +50,25 @@ Reference: `docs/planning/mvp/INSTALL_WINDOWS.md` for ports and first-run contex
 ## I) Install / onboarding sanity
 - [ ] Fresh developer path still documented: `INSTALL_WINDOWS.md` matches actual command you use to start the app.
 
+## J) Week 2 — Remote guardian access (Day 12)
+
+Run only when you intentionally deploy **remote** access per `INSTALL_WINDOWS.md` § **Day 12 — Practical remote login runbook** and `ADR_001_REMOTE_ADMIN_ACCESS.md`.
+
+- [ ] **Tunnel hostname:** From a **different network** (e.g. phone on cellular), open the HTTPS admin URL (e.g. `https://guardian.example.com/admin`); SPA loads and login works.
+- [ ] **Origin allow-list:** If you had to set `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS`, confirm edits persist after **restarting** Focus Guard (env read at process start).
+- [ ] **No accidental naked forward:** Confirm you are **not** relying on a raw router port-forward to `58393` as the primary remote path (tunnel or screen-share path is OK).
+- [ ] **API smoke (optional):** From a machine that can reach the tunnel URL:
+
+  `python scripts/admin_gateway_smoke.py --password "<ADMIN_PASSWORD>" --base-url https://guardian.example.com`
+
+  Expect exit code **0** and successful login + dashboard keys in output.
+
+- [ ] **Multi-guardian caveat:** If two people edit rules remotely, refresh-before-save until **[FR-029]** ships (`FEATURE_REQUESTS_PARKING_LOT.md`).
+
+## K) Week 2 — Metrics date range (Day 10) — quick spot check
+
+- [ ] With app running: dashboard or tab-server stats accept a **date range** as documented in `MVP_TEST_MATRIX.md` (activity query contract); no SQL or empty-body hard failures when changing range in UI if exposed.
+
 ## Outcome
 - **Pass:** all checked boxes for your target MVP profile (note any waived rows under “Waivers”).
 - **Fail:** open a blocker issue / fix P0 only; park everything else in `FEATURE_REQUESTS_PARKING_LOT.md`.
