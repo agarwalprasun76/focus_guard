@@ -43,6 +43,10 @@ let consecutiveServerFailures = 0; // Count of consecutive server request failur
 
 // Real-time blocking state
 let blockingCache = new Map(); // Cache for blocking decisions
+/** Last mode sample from syncBlockedDomainsToRules — invalidates stale block/allow cache on transition */
+let lastSeenEnforcementModeKey = null;
+/** Throttle DNR resync triggered from /api/should_block (Chrome vs Edge parity) */
+let lastDnrResyncFromShouldBlockMs = 0;
 let pendingBlocks = new Set(); // Track pending blocking decisions
 let eventQueue = []; // Queue for batched events
 let eventBatchTimer = null;
@@ -96,6 +100,82 @@ function debugLog(...args) {
     if (CONFIG.debug) {
         console.log('[FocusGuard]', ...args);
     }
+}
+
+/** Invalidate URL blocking cache when enforcement mode changes (e.g. enforcing → advisory). */
+function noteEnforcementModeFromServer(mode) {
+    const key = mode === null || mode === undefined ? 'unknown' : String(mode);
+    if (lastSeenEnforcementModeKey !== null && lastSeenEnforcementModeKey !== key) {
+        blockingCache.clear();
+        debugLog(`Cleared blocking decision cache (${lastSeenEnforcementModeKey} -> ${key})`);
+    }
+    lastSeenEnforcementModeKey = key;
+}
+
+/** Last instant DNR strip (avoids spamming updateSessionRules on rapid events) */
+let lastImmediateDnrClearMs = 0;
+
+/** Keep declarativeNetRequest aligned when server reports non-enforcing (covers missed sync_dnr / races). */
+function scheduleDnrResyncFromShouldBlockResponse(data) {
+    if (!data || typeof data.enforcement_mode !== 'string') {
+        return;
+    }
+    noteEnforcementModeFromServer(data.enforcement_mode);
+    if (data.enforcement_mode !== 'enforcing') {
+        // DNR runs at network layer before tabs.onUpdated — must strip redirects immediately
+        // when the server says advisory/tracking (async syncBlockedDomains alone can race).
+        const t = Date.now();
+        if (t - lastImmediateDnrClearMs > 400) {
+            lastImmediateDnrClearMs = t;
+            updateDynamicRules([]).catch((e) => debugLog('Immediate DNR clear (non-enforcing) failed:', e));
+        }
+        const now = Date.now();
+        if (now - lastDnrResyncFromShouldBlockMs < 1500) {
+            return;
+        }
+        lastDnrResyncFromShouldBlockMs = now;
+        syncBlockedDomainsToRules().catch((e) =>
+            debugLog('DNR resync after should_block (non-enforcing) failed:', e)
+        );
+    }
+}
+
+/** Origin of the tab server (e.g. http://127.0.0.1:58392) derived from CONFIG.serverUrl. */
+function getTabServerOrigin() {
+    try {
+        return new URL(CONFIG.serverUrl).origin;
+    } catch (e) {
+        return 'http://127.0.0.1:58392';
+    }
+}
+
+/**
+ * Current enforcement mode from deployment config (tracking | advisory | enforcing).
+ * Returns null if the tab server cannot be reached (caller should avoid assuming enforcing).
+ */
+async function fetchEnforcementMode() {
+    let lastErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const r = await fetch(`${getTabServerOrigin()}/api/enforcement_mode`, {
+                headers: { 'Cache-Control': 'no-cache' },
+            });
+            if (!r.ok) {
+                debugLog(`fetchEnforcementMode: HTTP ${r.status} (attempt ${attempt + 1})`);
+                lastErr = new Error(`HTTP ${r.status}`);
+            } else {
+                const j = await r.json();
+                const m = j.enforcement_mode;
+                return typeof m === 'string' ? m : null;
+            }
+        } catch (e) {
+            lastErr = e;
+            debugLog(`fetchEnforcementMode attempt ${attempt + 1} failed:`, e);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 90 * (attempt + 1)));
+    }
+    debugLog('fetchEnforcementMode failed after retries:', lastErr);
+    return null;
 }
 
 function updateIcon(connected) {
@@ -283,6 +363,10 @@ function processCommand(command) {
                 debugLog('Missing tabId in close_tab command');
                 return false;
             }
+        case 'sync_dnr':
+            // Server queued this after enforcement_mode changed — refresh DNR + cache invalidation immediately
+            syncBlockedDomainsToRules().catch((e) => debugLog('sync_dnr failed:', e));
+            return true;
         default:
             debugLog('Unknown command action:', command.action);
             return false;
@@ -427,21 +511,14 @@ let blockRuleId = 1;
 // declarativeNetRequest redirect rules for instant network-layer blocking.
 // This eliminates the redirect race (8.3.1) and works alongside real-time blocking.
 async function initPreemptiveBlocking() {
-    // Always clear stale rules on startup
+    // Clear dynamic + session rules on startup (session redirects can survive reload in Chrome)
     try {
-        const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-        if (existingRules.length > 0) {
-            const ruleIds = existingRules.map(rule => rule.id);
-            await chrome.declarativeNetRequest.updateDynamicRules({
-                removeRuleIds: ruleIds,
-                addRules: []
-            });
-            debugLog(`Cleared ${ruleIds.length} existing declarativeNetRequest rules`);
-        }
+        await updateDynamicRules([]);
+        debugLog('Startup: cleared declarativeNetRequest dynamic + session rules');
     } catch (err) {
-        debugLog('Error clearing declarativeNetRequest rules:', err);
+        debugLog('Error clearing declarativeNetRequest rules on startup:', err);
     }
-    
+
     debugLog('Initializing declarativeNetRequest domain sync (defense-in-depth)');
     
     // Create alarm to periodically sync blocked domains (every 5 min)
@@ -460,8 +537,27 @@ async function initPreemptiveBlocking() {
 // Sync blocked domains from server's domain overview into declarativeNetRequest rules.
 // This provides instant blocking for ALL known-blocked domains without waiting for
 // the real-time fetch per navigation.
+//
+// IMPORTANT (Day 8 Part B): Only **enforcing** mode may install network-layer DNR redirects.
+// In advisory/tracking, `GET /api/should_block` already suppresses hard blocks — but DNR would
+// still redirect main_frame navigations unless we clear rules here (Chrome vs Edge parity).
 async function syncBlockedDomainsToRules() {
     try {
+        const mode = await fetchEnforcementMode();
+        noteEnforcementModeFromServer(mode);
+        if (mode !== 'enforcing') {
+            debugLog(
+                `declarativeNetRequest: clearing dynamic rules (enforcement_mode=${mode === null ? 'unknown' : mode}; DNR only when enforcing)`
+            );
+            await updateDynamicRules([]);
+            if (mode !== null) {
+                markServerReachable();
+            } else {
+                markServerUnreachable();
+            }
+            return;
+        }
+
         const response = await fetch(
             `${CONFIG.serverUrl.replace('/api/tabs', '/api/domains/overview')}?include_blocked=true`,
             { headers: { 'Cache-Control': 'no-cache' } }
@@ -470,6 +566,15 @@ async function syncBlockedDomainsToRules() {
         if (!response.ok) {
             debugLog(`Failed to fetch domains for declarativeNetRequest sync: ${response.status}`);
             markServerUnreachable();
+            // If mode flipped to advisory/tracking while overview failed, clear stale DNR (Chrome/Edge parity)
+            try {
+                const modeRetry = await fetchEnforcementMode();
+                if (modeRetry !== 'enforcing') {
+                    await updateDynamicRules([]);
+                }
+            } catch (_) {
+                /* ignore */
+            }
             return;
         }
         
@@ -487,7 +592,8 @@ async function syncBlockedDomainsToRules() {
         }
         
         if (blockedDomains.length === 0) {
-            debugLog('No blocked domains to sync to declarativeNetRequest');
+            debugLog('No blocked domains to sync to declarativeNetRequest (clearing stale DNR rules)');
+            await updateDynamicRules([]);
             return;
         }
         
@@ -517,71 +623,97 @@ async function syncBlockedDomainsToRules() {
     } catch (err) {
         debugLog('Error syncing blocked domains to declarativeNetRequest:', err);
         markServerUnreachable();
+        try {
+            const modeRetry = await fetchEnforcementMode();
+            if (modeRetry !== 'enforcing') {
+                await updateDynamicRules([]);
+            }
+        } catch (_) {
+            /* ignore */
+        }
     }
 }
 
-// Update block rules from server
-function updateBlockRules() {
+// Update block rules from server (legacy preemptive path — must respect enforcement mode like syncBlockedDomainsToRules)
+async function updateBlockRules() {
     if (!CONFIG.usePreemptiveBlocking) return;
-    
+
+    const mode = await fetchEnforcementMode();
+    if (mode !== 'enforcing') {
+        debugLog(
+            `updateBlockRules: skipping legacy preemptive DNR (enforcement_mode=${mode === null ? 'unknown' : mode})`
+        );
+        return;
+    }
+
     debugLog('Updating block rules from server');
-    
-    // Get browser name for filtering
+
     const browserName = navigator.userAgent.includes('Edg') ? 'Microsoft Edge' : 'Google Chrome';
-    
-    // Fetch block rules from server
-    fetch(`${CONFIG.blockCheckUrl}/rules?browser=${encodeURIComponent(browserName)}`)
-        .then(response => {
-            if (!response.ok) throw new Error(`Server returned ${response.status}`);
-            return response.json();
-        })
-        .then(data => {
-            debugLog(`Received ${data.rules ? data.rules.length : 0} block rules`);
-            
-            if (data.rules && data.rules.length > 0) {
-                // Convert server rules to declarativeNetRequest rules
-                // Use redirect action to show our custom blocked page
-                const blockedPageUrl = chrome.runtime.getURL('blocked.html');
-                const newRules = data.rules.map((rule, index) => ({
-                    id: blockRuleId + index,
-                    priority: 1,
-                    action: { 
-                        type: 'redirect',
-                        redirect: {
-                            regexSubstitution: `${blockedPageUrl}?url=\\0&domain=${encodeURIComponent(rule.domain)}&reason=${encodeURIComponent(rule.reason || 'Blocked by FocusGuard')}`
-                        }
-                    },
-                    condition: {
-                        regexFilter: `^https?://([^/]*\\.)?${rule.domain.replace(/\./g, '\\.')}(/.*)?$`,
-                        resourceTypes: ['main_frame']
+
+    try {
+        const response = await fetch(
+            `${CONFIG.blockCheckUrl}/rules?browser=${encodeURIComponent(browserName)}`
+        );
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        const data = await response.json();
+        debugLog(`Received ${data.rules ? data.rules.length : 0} block rules`);
+
+        if (data.rules && data.rules.length > 0) {
+            const blockedPageUrl = chrome.runtime.getURL('blocked.html');
+            const newRules = data.rules.map((rule, index) => ({
+                id: blockRuleId + index,
+                priority: 1,
+                action: {
+                    type: 'redirect',
+                    redirect: {
+                        regexSubstitution: `${blockedPageUrl}?url=\\0&domain=${encodeURIComponent(rule.domain)}&reason=${encodeURIComponent(rule.reason || 'Blocked by FocusGuard')}`
                     }
-                }));
-                
-                // Update rules
-                updateDynamicRules(newRules);
-                blockRules = newRules;
-                blockRuleId += newRules.length;
-            }
-        })
-        .catch(err => {
-            debugLog('Error updating block rules:', err);
-        });
+                },
+                condition: {
+                    regexFilter: `^https?://([^/]*\\.)?${rule.domain.replace(/\./g, '\\.')}(/.*)?$`,
+                    resourceTypes: ['main_frame']
+                }
+            }));
+            await updateDynamicRules(newRules);
+            blockRules = newRules;
+            blockRuleId += newRules.length;
+        }
+    } catch (err) {
+        debugLog('Error updating block rules:', err);
+    }
 }
 
-// Update dynamic rules in declarativeNetRequest
+// Update dynamic rules in declarativeNetRequest (also clears session rules — Chrome can hold redirects there)
 async function updateDynamicRules(newRules) {
     try {
-        // Get existing rules
         const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
-        const existingRuleIds = existingRules.map(rule => rule.id);
-        
-        // Update rules (remove old, add new)
+        const existingRuleIds = existingRules.map((rule) => rule.id);
+
         await chrome.declarativeNetRequest.updateDynamicRules({
             removeRuleIds: existingRuleIds,
-            addRules: newRules
+            addRules: newRules,
         });
-        
-        debugLog(`Updated ${newRules.length} block rules`);
+
+        try {
+            if (
+                chrome.declarativeNetRequest.getSessionRules &&
+                chrome.declarativeNetRequest.updateSessionRules
+            ) {
+                const sessionRules = await chrome.declarativeNetRequest.getSessionRules();
+                const sessionIds = sessionRules.map((r) => r.id);
+                if (sessionIds.length > 0) {
+                    await chrome.declarativeNetRequest.updateSessionRules({
+                        removeRuleIds: sessionIds,
+                        addRules: [],
+                    });
+                    debugLog(`declarativeNetRequest: removed ${sessionIds.length} session rule(s)`);
+                }
+            }
+        } catch (sessErr) {
+            debugLog('declarativeNetRequest session rule cleanup skipped:', sessErr);
+        }
+
+        debugLog(`declarativeNetRequest: ${newRules.length} dynamic rule(s) active`);
     } catch (err) {
         debugLog('Error updating dynamic rules:', err);
     }
@@ -595,8 +727,9 @@ async function shouldBlockUrl(url, tabId = null) {
         // Extract domain from URL
         const domain = new URL(url).hostname;
         
-        // Check cache first for performance
-        const cacheKey = `${domain}:${url}`;
+        // Check cache first for performance (key includes enforcement mode to avoid cross-mode stale entries)
+        const modeKey = lastSeenEnforcementModeKey !== null ? lastSeenEnforcementModeKey : 'unknown';
+        const cacheKey = `${domain}:${url}:${modeKey}`;
         if (CONFIG.cacheBlockingDecisions && blockingCache.has(cacheKey)) {
             const cached = blockingCache.get(cacheKey);
             const age = Date.now() - cached.timestamp;
@@ -649,6 +782,7 @@ async function shouldBlockUrl(url, tabId = null) {
             
             markServerReachable();
             const data = await response.json();
+            scheduleDnrResyncFromShouldBlockResponse(data);
             const shouldBlock = data.should_block === true;
             
             // Cache the decision
@@ -774,7 +908,8 @@ async function shouldBlockUrlWithReason(url, tabId = null) {
             debugLog(`Override check failed (continuing with block check): ${overrideErr}`);
         }
         
-        const cacheKey = `${domain}:${url}`;
+        const modeKey = lastSeenEnforcementModeKey !== null ? lastSeenEnforcementModeKey : 'unknown';
+        const cacheKey = `${domain}:${url}:${modeKey}`;
         const isShortener = isUrlShortener(domain);
         
         // URL shorteners (8.7.1): skip cache since destination is unknown
@@ -835,7 +970,10 @@ async function shouldBlockUrlWithReason(url, tabId = null) {
         
         markServerReachable();
         const data = await response.json();
-        debugLog(`Server response for ${domain}: should_block=${data.should_block}, reason=${data.reason}`);
+        debugLog(
+            `Server response for ${domain}: should_block=${data.should_block}, reason=${data.reason}, enforcement_mode=${data.enforcement_mode || 'n/a'}`
+        );
+        scheduleDnrResyncFromShouldBlockResponse(data);
         const result = { 
             shouldBlock: data.should_block === true, 
             reason: data.reason || 'Blocked by FocusGuard' 

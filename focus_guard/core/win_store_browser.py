@@ -43,6 +43,31 @@ def open_google_chrome_url(url: str) -> bool:
     return False
 
 
+def open_chrome_extensions_page() -> bool:
+    """Open ``chrome://extensions`` in an installed Google Chrome binary."""
+    if sys.platform != "win32":
+        return False
+    for cand in _CHROME_PATHS:
+        if _popen_url(Path(cand), "chrome://extensions"):
+            return True
+    return False
+
+
+def open_edge_extensions_page() -> bool:
+    """Open ``edge://extensions`` in an installed Microsoft Edge binary."""
+    if sys.platform != "win32":
+        return False
+    for cand in _EDGE_PATHS:
+        if _popen_url(Path(cand), "edge://extensions"):
+            return True
+    try:
+        subprocess.Popen(["cmd.exe", "/c", "start", "", "msedge", "edge://extensions"])  # noqa: S607
+        return True
+    except OSError as e:
+        logger.debug("Could not open Edge extensions page: %s", e)
+        return False
+
+
 def open_microsoft_edge_url(url: str) -> bool:
     """Prefer Edge URI scheme, then msedge.exe, then `start msedge`."""
     if sys.platform != "win32":

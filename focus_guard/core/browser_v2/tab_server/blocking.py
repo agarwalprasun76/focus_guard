@@ -37,6 +37,9 @@ class BlockingDecision:
     
     # Budget info (for blocked page display)
     budget_status: Optional[Dict[str, Any]] = None  # time_used, time_budget, remaining
+
+    # Deployment enforcement mode when this decision was computed (extension / DNR parity)
+    enforcement_mode: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON response."""
@@ -45,6 +48,8 @@ class BlockingDecision:
             "reason": self.reason,
             "cached": self.cached,
         }
+        if self.enforcement_mode is not None:
+            result["enforcement_mode"] = self.enforcement_mode
         if self.rule:
             result["rule"] = {
                 "domain": self.rule.domain,

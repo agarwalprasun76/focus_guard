@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 
 import { ApiClientError, settingsApi } from "../api";
 import type { EnforcementMode, DomainEntry } from "../api/settings";
@@ -120,10 +121,13 @@ function EnforcementSection() {
       : null;
 
   return (
-    <section className="space-y-3">
+    <section id="enforcement-settings" className="scroll-mt-6 space-y-3">
       <div>
-        <h3 className="font-display text-lg text-ink">Protection Level</h3>
-        <p className="text-xs text-gray-500">How FocusGuard responds to distracting sites.</p>
+        <h3 className="font-display text-lg text-ink">Protection level</h3>
+        <p className="text-xs text-gray-500">
+          Enforcement mode for this device (tracking, advisory, or enforcing). Same setting as the Focus Guard desktop
+          app; extensions pick it up within a few seconds.
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -895,6 +899,15 @@ function EmailSection() {
 
 export function Settings() {
   const online = useOnlineStatus();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.hash !== "#enforcement-settings") return;
+    const el = document.getElementById("enforcement-settings");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [location.hash]);
 
   return (
     <div className="space-y-8">

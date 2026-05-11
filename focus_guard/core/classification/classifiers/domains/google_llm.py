@@ -228,7 +228,8 @@ class LLMBasedGoogleClassifier(LLMBasedDomainClassifier):
             )
             
         except Exception as e:
-            logger.error(f"Failed to parse Google LLM response: {e}, raw: {response[:200]}")
+            preview = (response[:200] if isinstance(response, str) else "") or "(no text)"
+            logger.error("Failed to parse Google LLM response: %s, raw: %s", e, preview)
             return Classification(
                 domain=domain,
                 category=Category.UNKNOWN,

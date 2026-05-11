@@ -45,16 +45,24 @@ class OpenAIClient(LLMClient):
             client: Optional pre-configured client for testing.
             **kwargs: Additional arguments to pass to the OpenAI client.
         """
-        self.api_key = (
-            api_key
-            or os.getenv("OPENAI_API_KEY")
-            or read_openai_api_key_from_api_token_file()
-        )
+        if api_key:
+            self.api_key = api_key
+            _key_source = "constructor_argument"
+        elif os.getenv("OPENAI_API_KEY", "").strip():
+            self.api_key = os.getenv("OPENAI_API_KEY", "").strip()
+            _key_source = "OPENAI_API_KEY_environment"
+        else:
+            self.api_key = read_openai_api_key_from_api_token_file()
+            _key_source = "api_token.json" if self.api_key else "none"
         if not self._validate_api_key(self.api_key):
             raise ValueError(
                 "OpenAI API key is required. Pass it directly, set OPENAI_API_KEY, "
                 "or add openai_api_key to %ProgramData%\\FocusGuard\\api_token.json."
             )
+        logger.info(
+            "OpenAI client initialized; key source=%s (env overrides ProgramData file if both are set).",
+            _key_source,
+        )
         
         self.model = model
         self.max_tokens = max_tokens
@@ -189,5 +197,12 @@ class OpenAIClient(LLMClient):
                 logger.debug(f"OpenAI API returned content: {content[:200]}...")
             return content
         except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
+            err_s = str(e)
+            logger.error("OpenAI API error: %s", e)
+            if "401" in err_s or "invalid_api_key" in err_s or "Incorrect API key" in err_s:
+                logger.warning(
+                    "OpenAI returned 401 (invalid or revoked key). Set a valid OPENAI_API_KEY or "
+                    "openai_api_key in %%ProgramData%%\\FocusGuard\\api_token.json. "
+                    "Rule-based classifiers will still run where configured."
+                )
             return None

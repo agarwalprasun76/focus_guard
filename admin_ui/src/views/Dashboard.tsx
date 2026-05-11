@@ -347,7 +347,7 @@ export function Dashboard() {
           <h2 className="font-display text-xl text-ink">
             {datePreset === "today" ? "Today's Focus" : datePreset === "yesterday" ? "Yesterday's Focus" : "Focus Summary"}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
               modeLabel === "Block" ? "bg-red-100 text-red-700" :
               modeLabel === "Warn" ? "bg-amber-100 text-amber-700" :
@@ -355,6 +355,12 @@ export function Dashboard() {
             }`}>
               {modeLabel}
             </span>
+            <Link
+              to="/settings#enforcement-settings"
+              className="text-[11px] font-semibold text-ocean hover:underline"
+            >
+              Change mode
+            </Link>
             <span className="text-xs text-gray-400">
               {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
             </span>

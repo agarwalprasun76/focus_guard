@@ -19,10 +19,16 @@ Close gaps where **deployment enforcement mode** (e.g. Advisory) and **actual bl
 
 ### Task checklist
 
-- [ ] Map the full path: `DeploymentConfig.enforcement_mode` → tab server / coordinator → extension messaging → any hosts or MV3 declarative rules.
-- [ ] Identify and remove or gate **duplicate block decisions** (e.g. budget enforcement firing when mode is advisory, or extension applying block lists independent of server mode).
+- [x] Map the full path: `DeploymentConfig.enforcement_mode` → tab server / coordinator → extension messaging → any hosts or MV3 declarative rules. *(DNR sync now gates on `GET /api/enforcement_mode`; tab server logs `blocking_decision …` for traces.)*
+- [x] Identify and remove or gate **duplicate block decisions** (e.g. budget enforcement firing when mode is advisory, or extension applying block lists independent of server mode). *(Fixed: MV3 `syncBlockedDomainsToRules` cleared DNR rules when mode ≠ `enforcing`, which caused advisory/tracking hard redirects despite `/api/should_block`.)*
 - [ ] Add integration or smoke steps: Advisory = no hard block on representative distraction URLs; Enforcing = consistent block for same set.
-- [ ] Document expected behavior in `MVP_SMOKE_TEST.md` or enforcement-mode section of install/smoke docs.
+- [x] Document expected behavior in `MVP_SMOKE_TEST.md` or enforcement-mode section of install/smoke docs.
+
+### OpenAI / LLM classification (operational)
+
+- **Symptom:** Logs show `401 Unauthorized` from `api.openai.com` and `LLM classification failed … 'NoneType' object is not subscriptable` when classifying (e.g. Google search URLs). The subscriptable error was a **secondary bug** in error logging when the LLM client returned `None` after 401; fixed in `LLMBasedDomainClassifier` and Google/URL LLM parsers so failures fall back cleanly to rule-based classifiers.
+- **Root cause of 401:** Invalid, expired, or rotated API key. Keys are read from `OPENAI_API_KEY` or `openai_api_key` / `open_ai_api_key` in `%ProgramData%\FocusGuard\api_token.json` (see `read_openai_api_key_from_api_token_file`). Re-validate the key in the OpenAI dashboard; ensure no stale key in env or JSON.
+- **Follow-up:** Optionally add a startup health log line when LLM is enabled but the first completion returns 401, so operators see it without tailing classification traffic.
 
 ### Files likely involved (discovery during execution)
 
@@ -43,10 +49,10 @@ Close gaps where **deployment enforcement mode** (e.g. Advisory) and **actual bl
 
 ### Task checklist
 
-- [ ] Reproduce with a **minimal matrix**: same OS user, same `deployment_config`, same Focus Guard process, fresh navigation to a canonical test URL in Chrome and in Edge.
-- [ ] Correlate **tab server logs** (and optional extension debug logging) with **browser + extension instance** so mismatches are visible in one timeline.
-- [ ] Audit MV3 manifests and background scripts for **Chrome vs Edge** conditionals or missing `host_permissions` / DNR rule scopes on one target.
-- [ ] Add **MVP_SMOKE_TEST.md** (or equivalent) steps: “same URL, both browsers, expect same enforcement outcome.”
+- [x] Reproduce with a **minimal matrix**: same OS user, same `deployment_config`, same Focus Guard process; disable **duplicate** extensions (e.g. store + unpacked in one browser) so only one MV3 instance enforces per browser.
+- [ ] Correlate **tab server logs** (grep `blocking_decision`) and extension debug logs (`declarativeNetRequest`) with **browser + extension instance** so mismatches are visible in one timeline.
+- [x] Audit MV3 manifests and background scripts for **Chrome vs Edge** conditionals or missing `host_permissions` / DNR rule scopes on one target. *(Same `background.js`; root cause for divergent blocks was DNR sync ignoring enforcement mode — addressed above.)*
+- [x] Add **MVP_SMOKE_TEST.md** (or equivalent) steps: “same URL, both browsers, expect same enforcement outcome.”
 - [ ] If a gap is unavoidable (platform limitation), document it in `INSTALL_WINDOWS.md` with a workaround—not silent drift.
 
 ### Files likely involved (discovery during execution)
@@ -88,6 +94,27 @@ Close gaps where **deployment enforcement mode** (e.g. Advisory) and **actual bl
 
 - Failures in **`Frontend: E2E (Playwright)`** come from `admin_ui` (`npm run test:e2e`), **not** from `scripts/run_release_integration_tests.py` (pytest only). If release pytest is green but full runner fails, inspect Playwright output first.
 
+## Work unit (separate ~1 day) — Classification: metadata fidelity + LLM path (Google / YouTube)
+
+**Not a new code module:** this is a **planning slice** you can schedule as its own exercise (e.g. “Day N — classification pipeline QA”). It overlaps Part B **observability** goals but deserves focused time because the failure modes are orthogonal to enforcement/DNR.
+
+**Problem (observed):**
+
+- Extensive logic exists for **page/source metadata** and LLM-assisted classification; in practice outcomes feel binary — e.g. **YouTube always blocked vs never blocked**, or **Google searches** not reaching the LLM path as expected (title/query/referrer/context empty, wrong classifier order, API key env vs ProgramData — see OpenAI subsection above).
+
+**Goals for the day:**
+
+1. **Trace:** Document the path extension → `/api/should_block` → `ClassificationService.classify*` → composite classifiers (**google_composite**, **youtube_composite**) and what **context** keys are passed (`url`, `title`, `query`, `referrer`, `tab_id`).
+2. **Instrumentation:** Confirm logs or temporary debug counters show whether **Google LLM** ran vs fell back to **google_rules**, and whether **metadata** arrives (grep `classified` / `google_llm` / `google_rules`).
+3. **Regression tests (pytest work unit, not a new package):** Add **focused unit/integration tests** with **mocked `OpenAIClient`** (existing pattern in `focus_guard/tests/`) asserting:
+   - Given rich `context` (title + URL with `q=`), classifier selection and **parsed category** behave as documented.
+   - Given **minimal** context (URL only), behavior matches expectations (fallback rules or UNKNOWN).
+   - YouTube classifier: same matrix with mocked LLM + rule path so blocking is not “all or nothing” from silent mis-routing.
+
+**Artifacts:** Short section in `MVP_SMOKE_TEST.md` or this file — “classification probe URLs” — for manual QA after the day.
+
+**Relation to existing plan:** Does **not** replace Part B enforcement items; ship Part B parity first if still in flight.
+
 ## Lower priority (after P0)
 
 - [ ] Extend post-setup validation to assert **effective enforcement mode** against a probe URL or mock classification response (optional).
@@ -98,3 +125,20 @@ Part B is meaningfully advanced when:
 
 1. Advisory vs enforcing behavior is **defined in one place**, **observable in logs**, and **covered by at least one repeatable test or smoke procedure** so inconsistent blocking (e.g. one entertainment-classified site blocked, another not under the same mode) is treated as a release blocker.
 2. **Chrome and Edge** show **the same blocking/advisory outcome** for the same test URLs under the same runtime config, or any intentional difference is **documented** with mitigation steps—not silent browser drift.
+
+
+
+
+Also I am getting these emails so wanted to verify that changes you are making are not getting undone due to built in safety.
+
+The FocusGuard domain configuration file was modified outside of the application.
+
+File: C:\Users\PRASUN~2\AppData\Local\Temp\tmpv7geovak\domain_config.json
+Expected hash: 21bc002142070d03...
+Actual hash:   65a423c8f2bd970e...
+Tamper count:  1
+Machine: NucBox_K8Plus
+User:
+Time: 2026-05-10 19:36:14
+
+The previous known-good configuration has been restored.

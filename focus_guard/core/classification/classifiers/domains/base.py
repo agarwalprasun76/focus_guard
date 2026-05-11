@@ -276,6 +276,10 @@ class LLMBasedDomainClassifier(BaseDomainClassifier):
                 prompt=prompt,
                 system_prompt=self.system_prompt
             )
+            if response is None:
+                return None
+            if isinstance(response, str) and not response.strip():
+                return None
             return self._parse_response(response, domain, context)
         except Exception as e:
             import logging

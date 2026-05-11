@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field, asdict
@@ -516,8 +517,28 @@ class DomainConfigManager:
             logger.warning("Could not verify config integrity: %s", e)
             return True  # Don't block on read errors
 
+    def _config_is_under_system_temp(self) -> bool:
+        """True when config lives under the OS temp directory.
+
+        Pytest and ``scripts/test_section8_mitigations.py`` intentionally tamper with a
+        temp ``domain_config.json``; we must not send real SMTP alerts for that path.
+        """
+        try:
+            p = self._config_path.resolve()
+            root = Path(tempfile.gettempdir()).resolve()
+            return root == p or root in p.parents
+        except Exception:
+            return False
+
     def _fire_tamper_alert(self, expected_hash: str, actual_hash: str) -> None:
         """Log audit event and send email alert on config tampering."""
+        if self._config_is_under_system_temp():
+            logger.debug(
+                "Tamper alert skipped for temp-dir domain config (typical of tests): %s",
+                self._config_path,
+            )
+            return
+
         try:
             from focus_guard.core.browser_v2.tab_server.audit_logger import get_audit_logger
             get_audit_logger().log_event(

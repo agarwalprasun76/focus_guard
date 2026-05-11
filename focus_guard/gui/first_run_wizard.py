@@ -18,6 +18,7 @@ from typing import Optional
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QFont, QIcon, QPixmap, QColor, QPainter
 from PyQt5.QtWidgets import (
+    QApplication,
     QWizard,
     QWizardPage,
     QLabel,
@@ -51,7 +52,10 @@ from focus_guard.core.extension_constants import (
     EDGE_EXTENSION_ID,
     EDGE_STORE_URL,
 )
+from focus_guard.core.extension_paths import get_mv3_extension_source_dir, mv3_extension_is_present
 from focus_guard.core.win_store_browser import (
+    open_chrome_extensions_page,
+    open_edge_extensions_page,
     open_google_chrome_url,
     open_microsoft_edge_url,
 )
@@ -383,6 +387,68 @@ class ExtensionPage(QWizardPage):
 
         layout.addWidget(_separator())
 
+        # --- Developers: load unpacked from repo / package (same MV3 for Chrome and Edge) ---
+        dev_group = QGroupBox("Developing Focus Guard? Install from this app folder")
+        dev_group.setToolTip(
+            "Skip the store while you iterate: load the bundled MV3 extension via Load unpacked."
+        )
+        dev_layout = QVBoxLayout()
+        dev_layout.addWidget(_body(
+            "Store review can take days. For local development, load the same MV3 bundle "
+            "that ships with Focus Guard:\n"
+            "  1. Open your browser's extensions page and turn on Developer mode.\n"
+            "  2. Click Load unpacked and choose the folder below (Chrome and Edge both support it).\n"
+            "  3. Reload the extension after you change files."
+        ))
+        self._mv3_path_label = QLabel()
+        self._mv3_path_label.setWordWrap(True)
+        self._mv3_path_label.setStyleSheet("color: #444; font-family: monospace; font-size: 11px;")
+        mv3_dir = get_mv3_extension_source_dir()
+        self._mv3_path_label.setText(str(mv3_dir.resolve()))
+        dev_layout.addWidget(self._mv3_path_label)
+
+        dev_row1 = QHBoxLayout()
+        open_folder_btn = QPushButton("Open extension folder")
+        open_folder_btn.setToolTip("Opens the MV3 folder in File Explorer (or the default file manager).")
+        open_folder_btn.clicked.connect(self._open_mv3_folder_in_file_manager)
+        dev_row1.addWidget(open_folder_btn)
+        copy_path_btn = QPushButton("Copy folder path")
+        copy_path_btn.setToolTip("Copies the path for Load unpacked.")
+        copy_path_btn.clicked.connect(self._copy_mv3_folder_path)
+        dev_row1.addWidget(copy_path_btn)
+        dev_row1.addStretch()
+        dev_layout.addLayout(dev_row1)
+
+        dev_row2 = QHBoxLayout()
+        chrome_ext_btn = QPushButton("Open Chrome extensions")
+        chrome_ext_btn.clicked.connect(self._open_chrome_extensions_settings)
+        dev_row2.addWidget(chrome_ext_btn)
+        edge_ext_btn = QPushButton("Open Edge extensions")
+        edge_ext_btn.clicked.connect(self._open_edge_extensions_settings)
+        dev_row2.addWidget(edge_ext_btn)
+        dev_row2.addStretch()
+        dev_layout.addLayout(dev_row2)
+
+        self._mv3_missing_label = QLabel()
+        self._mv3_missing_label.setWordWrap(True)
+        if not mv3_extension_is_present():
+            self._mv3_missing_label.setText(
+                "⚠ manifest.json was not found next to this install. "
+                "Clone or copy the repo so core/browser/extension/webextension_mv3 exists, "
+                "or use the store buttons above."
+            )
+            self._mv3_missing_label.setStyleSheet("color: #b45309;")
+            open_folder_btn.setEnabled(False)
+            copy_path_btn.setEnabled(False)
+        else:
+            self._mv3_missing_label.hide()
+        dev_layout.addWidget(self._mv3_missing_label)
+
+        dev_group.setLayout(dev_layout)
+        layout.addWidget(dev_group)
+
+        layout.addWidget(_separator())
+
         layout.addWidget(_body(
             "After installing, the extension will automatically connect to "
             f"Focus Guard's local server (port {tab_server_port}). No extra configuration needed."
@@ -395,7 +461,7 @@ class ExtensionPage(QWizardPage):
         ))
 
         self.extension_installed_cb = QCheckBox(
-            "I installed at least one Focus Guard browser extension from the store."
+            "I installed at least one Focus Guard browser extension (store or unpacked from this machine)."
         )
         self.extension_installed_cb.setToolTip(
             "Required for full blocking behavior and live tab visibility."
@@ -405,7 +471,7 @@ class ExtensionPage(QWizardPage):
         layout.addStretch()
 
         note = _body(
-            "Both the Edge and Chrome extensions are live on their respective stores."
+            "Production users typically install from the store; developers can load unpacked from the folder above."
         )
         note.setStyleSheet("color: #666;")
         layout.addWidget(note)
@@ -427,6 +493,48 @@ class ExtensionPage(QWizardPage):
             and open_google_chrome_url(CHROME_STORE_URL)
         ):
             webbrowser.open(CHROME_STORE_URL)
+
+    def _open_mv3_folder_in_file_manager(self) -> None:
+        p = get_mv3_extension_source_dir()
+        if not mv3_extension_is_present():
+            QMessageBox.warning(
+                self,
+                "Extension folder",
+                "manifest.json was not found in the expected folder.",
+            )
+            return
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(p))  # noqa: S606
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(p)])  # noqa: S603,S607
+            else:
+                subprocess.Popen(["xdg-open", str(p)])  # noqa: S603,S607
+        except OSError as e:
+            logger.warning("Could not open MV3 folder: %s", e)
+            QMessageBox.warning(self, "Extension folder", f"Could not open folder:\n{e}")
+
+    def _copy_mv3_folder_path(self) -> None:
+        path = str(get_mv3_extension_source_dir().resolve())
+        QApplication.clipboard().setText(path)
+
+    def _open_chrome_extensions_settings(self) -> None:
+        if sys.platform == "win32" and open_chrome_extensions_page():
+            return
+        QMessageBox.information(
+            self,
+            "Chrome extensions",
+            "Open Google Chrome and go to:\nchrome://extensions\n\nEnable Developer mode, then Load unpacked.",
+        )
+
+    def _open_edge_extensions_settings(self) -> None:
+        if sys.platform == "win32" and open_edge_extensions_page():
+            return
+        QMessageBox.information(
+            self,
+            "Edge extensions",
+            "Open Microsoft Edge and go to:\nedge://extensions\n\nEnable Developer mode, then Load unpacked.",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════

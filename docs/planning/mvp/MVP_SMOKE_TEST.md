@@ -36,6 +36,10 @@ Reference: `docs/planning/mvp/INSTALL_WINDOWS.md` for ports and first-run contex
 - [ ] Visit a URL that should be blocked — block page or blocked behavior appears per policy.
 - [ ] Request override (if enabled) — grant and usage behave as expected (no double-count on reopen).
 
+### Enforcement modes (advisory / tracking vs enforcing)
+- [ ] With deployment mode **Enforcing**: distraction URLs can show the blocked page / blocking behavior per policy (including declarativeNetRequest redirects synced from the tab server).
+- [ ] With deployment mode **Advisory** or **Tracking**: the extension must **not** apply **network-layer** hard redirects for policy blocks alone — MV3 clears declarativeNetRequest rules unless mode is enforcing; `/api/should_block` reflects advisory semantics. Spot-check the same URL in **Chrome and Edge** with one Focus Guard process (parity).
+
 ## G) Feedback (Day 5 plumbing)
 - [ ] Submit feedback linked to a real `decision_id` (or extension/blocked page path when wired).
 - [ ] With bearer token from `%ProgramData%\FocusGuard\api_token.json`: `GET /api/feedback/blocking?limit=5` returns rows.

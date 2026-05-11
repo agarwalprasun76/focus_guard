@@ -1081,6 +1081,14 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             config.save()
             
             logger.info("Enforcement mode changed: %s -> %s", old_mode, new_mode)
+
+            # Extensions poll GET /api/command ~every 2s; refresh DNR + invalidate caches immediately
+            try:
+                sync_cmd: Dict[str, Any] = {"action": "sync_dnr", "reason": "enforcement_mode_changed"}
+                self.context.queue_command("Google Chrome", sync_cmd)
+                self.context.queue_command("Microsoft Edge", sync_cmd)
+            except Exception as exc:
+                logger.debug("Could not queue sync_dnr for extensions: %s", exc)
             
             # Audit log
             try:
@@ -2372,6 +2380,8 @@ class TabServerContext:
             except TypeError:
                 decision = self._blocking_checker(url, domain)
 
+        pipeline_would_block = bool(decision.should_block)
+
         # --- Apply enforcement mode ---
         if enforcement_mode != "enforcing" and decision.should_block:
             original_reason = decision.reason
@@ -2380,10 +2390,18 @@ class TabServerContext:
                 decision.reason = f"[TRACKING] Would block: {original_reason}"
             elif enforcement_mode == "advisory":
                 decision.reason = f"[ADVISORY] Would block: {original_reason}"
-            logger.info(
-                "Enforcement mode '%s': allowing %s (would have blocked: %s)",
-                enforcement_mode, domain, original_reason,
-            )
+
+        # Single structured line for audits / Day 8 Part B tracing (grep: blocking_decision)
+        logger.info(
+            "blocking_decision domain=%s enforcement_mode=%s pipeline_would_block=%s final_should_block=%s reason=%s",
+            domain,
+            enforcement_mode,
+            pipeline_would_block,
+            decision.should_block,
+            (decision.reason or "")[:400],
+        )
+
+        decision.enforcement_mode = enforcement_mode
 
         # --- Record block event for blocks_today counter ---
         if decision.should_block:

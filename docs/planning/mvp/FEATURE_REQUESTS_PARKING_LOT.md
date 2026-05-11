@@ -327,6 +327,34 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Status: parked
 
 
+
+### [FR-020]
+- Date: 2026-05-10
+- Requested by: Domain Blocking
+- Title: Rerouting of pages for authentication
+- Priority: P3
+- Area: After MVP
+- Problem: Going to a link from an approved page often requires going to some sites that require authentication and may not have been added to allow list.
+- Proposed idea: Can we make that process easier and more transparent for blocking so an embedded link to youtube for a science video or such doesnt get blocked.
+
+- Why not now: Not needed for MVP but an additional nice to have feature
+- Owner:
+- Status: parked
+
+
+### [FR-021]
+- Date: 2026-05-10
+- Requested by: MVP / classification quality
+- Title: Work unit (~1 day): metadata + LLM classification path for Google search and YouTube
+- Priority: P1
+- Area: classification / blocking / testing
+- Problem: Metadata-rich classification and OpenAI-assisted paths appear inconsistent — YouTube seems “all blocked or all allowed”; Google search may not route to the LLM as intended (extension context vs composite classifier order vs API key source).
+- Proposed idea: Schedule as standalone day per `Day_8_partb.Execution_plan.md` section **Work unit … Classification**. Trace context from extension to tab server; add pytest coverage with mocked OpenAI (not a new runtime module); document smoke probe URLs.
+- Why not now: Keep separate from active Part B enforcement/DNR work unless re-prioritized.
+- Earliest revisit day: next open sprint day after Part B parity
+- Owner:
+- Status: parked
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)
