@@ -1650,7 +1650,9 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             domain: Filter by domain
             blocked: If 'true', only return blocked events
             distracting: If 'true', only return distracting events
-            since: ISO timestamp to filter after
+            since: ISO timestamp (inclusive lower bound); YYYY-MM-DD → UTC midnight
+            until: ISO timestamp (exclusive upper bound); bare date → through end of that UTC day
+            start_date / end_date: YYYY-MM-DD inclusive UTC range (both required); overrides since/until
         """
         try:
             from .activity_logger import get_activity_logger
@@ -1661,7 +1663,10 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
             domain = params.get("domain")
             blocked_only = params.get("blocked", "").lower() == "true"
             distracting_only = params.get("distracting", "").lower() == "true"
-            since = params.get("since")
+            since = params.get("since") or None
+            until = params.get("until") or None
+            start_date = params.get("start_date") or None
+            end_date = params.get("end_date") or None
             
             entries = activity_logger.get_recent_activity(
                 limit=limit,
@@ -1670,6 +1675,9 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                 blocked_only=blocked_only,
                 distracting_only=distracting_only,
                 since=since,
+                until=until,
+                start_date=start_date,
+                end_date=end_date,
             )
             
             self._set_headers(HTTPStatus.OK)
@@ -1686,14 +1694,24 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
         """Get activity statistics.
         
         Query params:
-            since: ISO timestamp to filter stats after
+            since: inclusive lower instant (ISO or YYYY-MM-DD as UTC midnight)
+            until: exclusive upper instant (ISO or YYYY-MM-DD through end of that UTC day)
+            start_date / end_date: YYYY-MM-DD inclusive UTC calendar range when both provided
         """
         try:
             from .activity_logger import get_activity_logger
             activity_logger = get_activity_logger()
             
-            since = params.get("since")
-            stats = activity_logger.get_activity_stats(since=since)
+            since = params.get("since") or None
+            until = params.get("until") or None
+            start_date = params.get("start_date") or None
+            end_date = params.get("end_date") or None
+            stats = activity_logger.get_activity_stats(
+                since=since,
+                until=until,
+                start_date=start_date,
+                end_date=end_date,
+            )
             
             self._set_headers(HTTPStatus.OK)
             self.wfile.write(json.dumps(stats).encode("utf-8"))

@@ -84,3 +84,13 @@ def test_dashboard_passes_date_range_to_override_log_request():
     assert captured_params["until"] == "2026-05-03"
     assert captured_params["limit"] == 25
 
+    assert ("/api/activity/stats", {"start_date": "2026-05-01", "end_date": "2026-05-03"}) in client.calls
+    log_calls = [c for c in client.calls if c[0] == "/api/activity/logs"]
+    assert log_calls
+    assert log_calls[0][1] == {
+        "start_date": "2026-05-01",
+        "end_date": "2026-05-03",
+        "blocked": "true",
+        "limit": 10,
+    }
+

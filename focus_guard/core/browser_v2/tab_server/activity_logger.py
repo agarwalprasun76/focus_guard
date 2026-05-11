@@ -6,15 +6,104 @@ for monitoring, reporting, and analysis.
 
 import json
 import logging
+import re
 import sqlite3
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+_YMD = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def utc_now_iso_z() -> str:
+    """Wall-clock instant as ISO-8601 UTC with ``Z`` (microsecond resolution)."""
+    return (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _is_ymd(s: str) -> bool:
+    return bool(_YMD.match(s.strip()))
+
+
+def _normalize_since_arg(s: str) -> str:
+    """Lower bound: YYYY-MM-DD → UTC midnight; full ISO passed through for SQLite ``datetime()``."""
+    s = s.strip()
+    if _is_ymd(s):
+        return f"{s}T00:00:00Z"
+    return s
+
+
+def _normalize_until_arg(s: str) -> str:
+    """Upper bound (exclusive): YYYY-MM-DD → start of *next* UTC day; full ISO passed through."""
+    s = s.strip()
+    if _is_ymd(s):
+        d = date.fromisoformat(s)
+        return f"{(d + timedelta(days=1)).isoformat()}T00:00:00Z"
+    return s
+
+
+def _utc_calendar_range(
+    start_date: str, end_date: str
+) -> Tuple[str, str, bool]:
+    """Inclusive calendar range in UTC: returns (since, until_exclusive, swapped)."""
+    d0 = date.fromisoformat(start_date.strip())
+    d1 = date.fromisoformat(end_date.strip())
+    swapped = False
+    if d1 < d0:
+        d0, d1 = d1, d0
+        swapped = True
+    since = f"{d0.isoformat()}T00:00:00Z"
+    until = f"{(d1 + timedelta(days=1)).isoformat()}T00:00:00Z"
+    return since, until, swapped
+
+
+def _append_time_filters(
+    clauses: List[str],
+    params: List[str],
+    *,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Mutates clauses/params with ``datetime(timestamp)`` comparisons; returns resolved range metadata."""
+    meta: Dict[str, Any] = {
+        "time_basis": "UTC",
+        "since": None,
+        "until_exclusive": None,
+        "start_date": start_date,
+        "end_date": end_date,
+        "range_swapped": False,
+    }
+    eff_since: Optional[str] = None
+    eff_until: Optional[str] = None
+
+    if start_date and end_date:
+        eff_since, eff_until, swapped = _utc_calendar_range(start_date, end_date)
+        meta["range_swapped"] = swapped
+    else:
+        if since:
+            eff_since = _normalize_since_arg(since)
+        if until:
+            eff_until = _normalize_until_arg(until)
+
+    if eff_since:
+        clauses.append("datetime(timestamp) >= datetime(?)")
+        params.append(eff_since)
+        meta["since"] = eff_since
+    if eff_until:
+        clauses.append("datetime(timestamp) < datetime(?)")
+        params.append(eff_until)
+        meta["until_exclusive"] = eff_until
+
+    return meta
 
 
 @dataclass
@@ -237,7 +326,7 @@ class ActivityLogger:
     ) -> Optional[int]:
         """Log an event to the database."""
         try:
-            timestamp = datetime.now().isoformat()
+            timestamp = utc_now_iso_z()
             metadata_str = json.dumps(metadata) if metadata else "{}"
             
             with self._lock:
@@ -281,6 +370,9 @@ class ActivityLogger:
         blocked_only: bool = False,
         distracting_only: bool = False,
         since: Optional[str] = None,
+        until: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[ActivityEntry]:
         """Get recent activity entries."""
         try:
@@ -290,7 +382,7 @@ class ActivityLogger:
                     cursor = conn.cursor()
                     
                     query = "SELECT * FROM activity_log WHERE 1=1"
-                    params = []
+                    params: List[Any] = []
                     
                     if event_type:
                         query += " AND event_type = ?"
@@ -306,11 +398,19 @@ class ActivityLogger:
                     if distracting_only:
                         query += " AND is_distracting = 1"
                     
-                    if since:
-                        query += " AND timestamp > ?"
-                        params.append(since)
+                    clauses: List[str] = []
+                    _append_time_filters(
+                        clauses,
+                        params,
+                        since=since,
+                        until=until,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                    for c in clauses:
+                        query += f" AND {c}"
                     
-                    query += " ORDER BY timestamp DESC LIMIT ?"
+                    query += " ORDER BY datetime(timestamp) DESC LIMIT ?"
                     params.append(limit)
                     
                     cursor.execute(query, params)
@@ -347,63 +447,95 @@ class ActivityLogger:
     def get_activity_stats(
         self,
         since: Optional[str] = None,
+        until: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Get activity statistics."""
+        """Aggregate activity counters for a UTC time window.
+
+        **Range contract (half-open)**  
+        Rows match ``since <= ts < until_exclusive`` in absolute time after SQLite
+        parses each stored ``timestamp`` with ``datetime()``. Exclusive upper bound
+        avoids fence-post bugs for calendar ranges.
+
+        * ``start_date`` / ``end_date`` (YYYY-MM-DD, both required): UTC calendar
+          days inclusive of both endpoints.
+        * ``since`` / ``until``: optional ISO timestamps or bare YYYY-MM-DD
+          (``since`` starts at UTC midnight; ``until`` date means through end of that UTC day).
+
+        New rows are logged with ``utc_now_iso_z()``; legacy local ISO strings remain
+        queryable via ``datetime(timestamp)``.
+        """
         try:
             with self._lock:
                 conn = sqlite3.connect(self.db_path)
                 try:
                     cursor = conn.cursor()
-                    
-                    where_clause = ""
-                    params = []
-                    if since:
-                        where_clause = "WHERE timestamp > ?"
-                        params.append(since)
-                    
-                    # Total events
-                    cursor.execute(f"SELECT COUNT(*) FROM activity_log {where_clause}", params)
+
+                    time_clauses: List[str] = []
+                    time_params: List[str] = []
+                    meta = _append_time_filters(
+                        time_clauses,
+                        time_params,
+                        since=since,
+                        until=until,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+
+                    def _where(extra: Optional[List[str]] = None) -> tuple[str, List[str]]:
+                        parts = [*time_clauses, *(extra or [])]
+                        if not parts:
+                            return "", []
+                        return "WHERE " + " AND ".join(parts), [*time_params]
+
+                    wc, qp = _where()
+                    cursor.execute(f"SELECT COUNT(*) FROM activity_log {wc}", qp)
                     total = cursor.fetchone()[0]
-                    
-                    # Blocked count
-                    blocked_where = where_clause + (" AND " if where_clause else "WHERE ") + "is_blocked = 1"
-                    cursor.execute(f"SELECT COUNT(*) FROM activity_log {blocked_where}", params)
+
+                    wc_b, qp_b = _where(["is_blocked = 1"])
+                    cursor.execute(f"SELECT COUNT(*) FROM activity_log {wc_b}", qp_b)
                     blocked = cursor.fetchone()[0]
-                    
-                    # Distracting count
-                    distracting_where = where_clause + (" AND " if where_clause else "WHERE ") + "is_distracting = 1"
-                    cursor.execute(f"SELECT COUNT(*) FROM activity_log {distracting_where}", params)
+
+                    wc_d, qp_d = _where(["is_distracting = 1"])
+                    cursor.execute(f"SELECT COUNT(*) FROM activity_log {wc_d}", qp_d)
                     distracting = cursor.fetchone()[0]
-                    
-                    # By event type
-                    cursor.execute(f"""
-                        SELECT event_type, COUNT(*) 
-                        FROM activity_log {where_clause}
+
+                    cursor.execute(
+                        f"""
+                        SELECT event_type, COUNT(*)
+                        FROM activity_log {wc}
                         GROUP BY event_type
                         ORDER BY COUNT(*) DESC
-                    """, params)
+                        """,
+                        qp,
+                    )
                     by_event_type = dict(cursor.fetchall())
-                    
-                    # By category
-                    category_where = where_clause + (" AND " if where_clause else "WHERE ") + "classification_category != ''"
-                    cursor.execute(f"""
-                        SELECT classification_category, COUNT(*) 
-                        FROM activity_log {category_where}
+
+                    wc_c, qp_c = _where(["classification_category != ''"])
+                    cursor.execute(
+                        f"""
+                        SELECT classification_category, COUNT(*)
+                        FROM activity_log {wc_c}
                         GROUP BY classification_category
                         ORDER BY COUNT(*) DESC
-                    """, params)
+                        """,
+                        qp_c,
+                    )
                     by_category = dict(cursor.fetchall())
-                    
-                    # Top blocked domains
-                    cursor.execute(f"""
-                        SELECT domain, COUNT(*) 
-                        FROM activity_log {blocked_where}
+
+                    cursor.execute(
+                        f"""
+                        SELECT domain, COUNT(*)
+                        FROM activity_log {wc_b}
                         GROUP BY domain
                         ORDER BY COUNT(*) DESC
                         LIMIT 10
-                    """, params)
+                        """,
+                        qp_b,
+                    )
                     top_blocked_domains = [{"domain": r[0], "count": r[1]} for r in cursor.fetchall()]
-                    
+
                     return {
                         "total_events": total,
                         "blocked_count": blocked,
@@ -413,6 +545,7 @@ class ActivityLogger:
                         "by_event_type": by_event_type,
                         "by_category": by_category,
                         "top_blocked_domains": top_blocked_domains,
+                        "query": meta,
                     }
                 finally:
                     conn.close()

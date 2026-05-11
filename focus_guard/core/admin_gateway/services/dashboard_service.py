@@ -58,8 +58,9 @@ class DashboardService:
         All upstream calls run in parallel via a thread pool to avoid the
         cumulative latency of 12 sequential HTTP round-trips.
 
-        start_date / end_date: optional YYYY-MM-DD; when set, override log
-        and friction data are filtered to that range. Budget/stats remain today.
+        start_date / end_date: optional YYYY-MM-DD; when both set, override log,
+        friction data, **and** browsing activity stats/recent-blocks use the same
+        UTC inclusive calendar window (aligned with `/api/activity/apps`). Budget KPIs remain "today".
         """
 
         target_device = device_id or "default-device"
@@ -69,6 +70,10 @@ class DashboardService:
             override_log_params["since"] = start_date
         if end_date:
             override_log_params["until"] = end_date
+
+        activity_range: dict[str, Any] | None = None
+        if start_date and end_date:
+            activity_range = {"start_date": start_date, "end_date": end_date}
 
         requests: dict[str, tuple[str, dict[str, Any] | None]] = {
             "health": ("/api/health", None),
@@ -81,8 +86,11 @@ class DashboardService:
             "saved_links_stats": ("/api/saved_links/stats", None),
             "saved_links_resp": ("/api/saved_links", {"limit": 5}),
             "tabs_snapshot": ("/api/tabs", None),
-            "activity_stats": ("/api/activity/stats", None),
-            "blocked_activity_resp": ("/api/activity/logs", {"blocked": "true", "limit": 10}),
+            "activity_stats": ("/api/activity/stats", activity_range),
+            "blocked_activity_resp": (
+                "/api/activity/logs",
+                {**(activity_range or {}), "blocked": "true", "limit": 10},
+            ),
         }
 
         results = self._fetch_all_parallel(requests)

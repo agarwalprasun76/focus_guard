@@ -8,7 +8,7 @@ This provides immediate value to users by surfacing actionable insights.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -363,7 +363,11 @@ class AnalyticsService:
         if not activity:
             return {"error": "Activity logger not available"}
         
-        since = (datetime.now() - timedelta(days=days)).isoformat()
+        since = (
+            (datetime.now(timezone.utc) - timedelta(days=days))
+            .isoformat(timespec="microseconds")
+            .replace("+00:00", "Z")
+        )
         
         try:
             entries = activity.get_recent_activity(limit=10000, since=since)
@@ -373,8 +377,14 @@ class AnalyticsService:
             
             for entry in entries:
                 try:
-                    ts = datetime.fromisoformat(entry.timestamp)
-                    hour = ts.hour
+                    raw = entry.timestamp.strip()
+                    if raw.endswith("Z"):
+                        ts = datetime.fromisoformat(raw[:-1] + "+00:00")
+                    else:
+                        ts = datetime.fromisoformat(raw)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    hour = ts.astimezone(timezone.utc).hour
                     hourly_counts[hour]["total"] += 1
                     if entry.is_distracting:
                         hourly_counts[hour]["distracting"] += 1

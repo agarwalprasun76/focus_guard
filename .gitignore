@@ -36,6 +36,9 @@ ENV/
 *.log
 logs/
 
+# Runtime caches (generated; optional to ship in repo)
+**/hosts_domains_cache.pkl
+
 # Local development
 .env
 .env.*

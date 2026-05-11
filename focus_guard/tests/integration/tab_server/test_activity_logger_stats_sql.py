@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from focus_guard.core.browser_v2.tab_server.activity_logger import ActivityLogger
 
@@ -20,11 +20,17 @@ def test_get_activity_stats_with_since_includes_by_category_without_sql_error(tm
         classifier_used="youtube_rule_based",
     )
 
-    since = (datetime.now() - timedelta(minutes=1)).isoformat()
+    since = (
+        (datetime.now(timezone.utc) - timedelta(minutes=1))
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z")
+    )
     stats = logger.get_activity_stats(since=since)
 
     assert isinstance(stats, dict)
     assert stats.get("total_events", 0) >= 1
+    q = stats.get("query") or {}
+    assert q.get("time_basis") == "UTC"
     by_category = stats.get("by_category", {})
     assert isinstance(by_category, dict)
     assert by_category.get("ENTERTAINMENT", 0) >= 1

@@ -67,7 +67,14 @@ For full core including heavy paths, drop `--ignore` (expect minutes).
 **High-signal subsets** (if you need to narrow):
 
 - `pytest focus_guard/tests/core/admin_gateway -q`
+- `pytest focus_guard/tests/integration/tab_server/test_activity_logger_time_range.py focus_guard/tests/integration/tab_server/test_activity_logger_stats_sql.py -q` — activity log UTC / calendar range contract (`/api/activity/stats`, `/api/activity/logs`)
 - `pytest focus_guard/tests/integration -q` (longer; may need keys / network depending on tests)
+
+### Activity metrics range query contract (Week 2 / Day 10)
+
+- Tab server **`activity_log`** rows: new timestamps are **UTC** ISO-8601 with a **`Z`** suffix (`utc_now_iso_z`).
+- **`GET /api/activity/stats`** and **`GET /api/activity/logs`** accept **`start_date` + end_date`** (YYYY-MM-DD, UTC calendar inclusive of both ends) or **`since` / `until`** (half-open `[since, until)` after SQLite `datetime()` parsing). Responses include **`query`** metadata describing the resolved window where applicable.
+- Admin gateway **`GET /admin/api/v1/dashboard?start_date=…&end_date=…`** passes the same **`start_date` / `end_date`** to activity stats and recent blocked-browser logs alongside override log filtering.
 
 ---
 
