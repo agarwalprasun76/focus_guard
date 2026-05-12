@@ -329,11 +329,34 @@ If **Zero Trust → Tunnels → FocusGuard-admin** shows **Healthy**, the connec
 | Issue | What to check |
 |--------|----------------|
 | **`DNS_PROBE_FINISHED_NXDOMAIN`** / “site can’t be reached” (DNS) | The public hostname has **no DNS record** the world can see, or **`focus-guard.org` is not using Cloudflare nameservers**. See **NXDOMAIN** steps below. |
-| **502** / bad gateway | Focus Guard not running; wrong service URL (must be `127.0.0.1:58393`); `cloudflared` service stopped. |
+| **502** / **Bad gateway** (Cloudflare error page) | Cloudflare reached your tunnel, but **`cloudflared` could not get a good HTTP response** from the origin you configured. See **502** steps below (almost always **Focus Guard not listening on `127.0.0.1:58393`** on the **same PC** that runs the tunnel, or wrong URL/port in **Public hostnames**). |
 | **403** `origin not allowed` | Set `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` exactly to `https://guardian.example.com` (no path); restart app. |
 | **SSL errors** | Browser must use **https** to the Cloudflare hostname; do not point the tunnel at `https://127.0.0.1:58393`. |
 | Tunnel “down” in dashboard | PC asleep, firewall blocking outbound QUIC/HTTPS, or token revoked — reinstall connector with new token if needed. |
 | **Quick Tunnel** (`trycloudflare.com`) | Hostname changes often → you must update `FOCUS_GUARD_ADMIN_ALLOWED_ORIGINS` each time. Prefer a **named tunnel + your domain**. |
+
+### `502 Bad Gateway` — tunnel works, origin does not
+
+A **502** from Cloudflare on `guardian.focus-guard.org` means: **DNS + tunnel connector are OK**, but the request to **`http://127.0.0.1:58393`** (your configured **origin**) failed from the machine running **`cloudflared`**.
+
+Check **on the PC where the tunnel runs** (your dashboard showed **NucBox_K8Plus**):
+
+1. **Is Focus Guard running?**  
+   Start the tray app / `python -m focus_guard.main` so the **admin gateway** starts.
+
+2. **Local smoke test (same PC, browser or PowerShell):**  
+   Open `http://127.0.0.1:58393/admin/health`  
+   You should get JSON (`status` ok). If this **fails**, the tunnel will **502** — fix Focus Guard first (port in use, crash on startup, `FOCUS_GUARD_START_ADMIN_GATEWAY=0`, etc.).
+
+3. **Tunnel public hostname must match the real port:**  
+   **Zero Trust → Tunnels → FocusGuard-admin → Public hostnames** → **`guardian.focus-guard.org`** → **Service** must be exactly **`http://127.0.0.1:58393`** (not `https://…`, not another port unless you changed the gateway). If you set `FOCUS_GUARD_ADMIN_GATEWAY_PORT` to something other than `58393`, update this URL to match.
+
+4. **`cloudflared` service running?**  
+   On Windows: **Services** (`services.msc`) → **Cloudflared** (or similar) → **Running**. Or PowerShell: `Get-Service cloudflared`. If **Stopped**, start it. If the tunnel dashboard shows **Healthy** but you still get 502, the connector is up but **origin refused** — still usually steps 1–3.
+
+5. **Same machine:** The tunnel must run on the **same Windows session/machine** where Focus Guard listens on `127.0.0.1:58393`. If you moved the tunnel to another PC without Focus Guard, you will get **502**.
+
+6. **After fixing:** Wait **30–60 seconds** and hard-refresh the browser (or try private window). Cloudflare may cache a short error window.
 
 ### `DNS_PROBE_FINISHED_NXDOMAIN` (Chrome) — DNS does not know `guardian.focus-guard.org`
 
