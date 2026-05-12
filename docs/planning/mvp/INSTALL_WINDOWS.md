@@ -82,6 +82,8 @@ Operators often need **rules, exceptions, enforcement mode, budgets, and monitor
 
 **Future option:** optional wizard / settings flow to **assist** setup is tracked as **`FEATURE_REQUESTS_PARKING_LOT.md` [FR-030]** (e.g. detect `cloudflared` on PATH, offer one-click download of the **official** Windows build with checksum verification, optional “paste token + install service” with explicit uninstall hook — still with Cloudflare dashboard for hostname and Access).
 
+**Apex / `www` (e.g. `focus-guard.org`):** optional **redirect** or **small landing page** + **Cloudflare Access** for who may open the guardian URL — **`docs/planning/mvp/FOCUS_GUARD_LANDING_AND_ACCESS.md`** and **`deployment/landing/focus-guard-org/`**.
+
 #### Day 12 — Practical remote login runbook (out-of-network)
 
 **Step-by-step Cloudflare setup (vendor UI changes over time):**  

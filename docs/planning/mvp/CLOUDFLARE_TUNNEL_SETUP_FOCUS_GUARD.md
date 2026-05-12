@@ -276,14 +276,14 @@ python scripts/admin_gateway_smoke.py --password "<ADMIN_PASSWORD>" --base-url h
 
 On your phone (cellular, not Wi‑Fi):
 
-1. Open `https://guardian.example.com/admin`
+1. Open `https://guardian.focus-guard.org/admin`
 2. Log in with the **wizard admin password**
 3. Confirm dashboard and settings load.
 
 Optional API check from any machine that can reach the URL (repo root):
 
 ```powershell
-python scripts/admin_gateway_smoke.py --password "<ADMIN_PASSWORD>" --base-url https://guardian.example.com
+python scripts/admin_gateway_smoke.py --password "<ADMIN_PASSWORD>" --base-url https://guardian.focus-guard.org
 ```
 
 ---
@@ -319,6 +319,8 @@ If **Zero Trust → Tunnels → FocusGuard-admin** shows **Healthy**, the connec
 | **Optional** | **Security → WAF / Firewall rules** | Later you can add geo or challenge rules for `guardian.focus-guard.org`; test carefully so you don’t lock yourself out. |
 
 **Nothing else is required** on Cloudflare for remote admin to function; **Access** is the main follow-up once the UI is reachable.
+
+**Optional:** a **redirect or landing page** on the apex (`focus-guard.org` / `www`) — see **`docs/planning/mvp/FOCUS_GUARD_LANDING_AND_ACCESS.md`** and static files under **`deployment/landing/focus-guard-org/`**.
 
 ---
 

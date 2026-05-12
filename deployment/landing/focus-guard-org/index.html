@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Focus Guard — Family admin</title>
+  <meta name="description" content="Focus Guard helps families manage screen time and distractions. Sign in to the guardian dashboard." />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e8eef5;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --accent-hover: #5a9dff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(ellipse 120% 80% at 50% -20%, #1e3a5f 0%, var(--bg) 55%);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 2.25rem 2rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0 0 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    p.lead {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.55;
+      margin: 0 0 1.75rem;
+    }
+    a.btn {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      padding: 0.85rem 1.25rem;
+      border-radius: 10px;
+      font-size: 1rem;
+      transition: background 0.15s ease;
+    }
+    a.btn:hover { background: var(--accent-hover); }
+    .sub {
+      margin-top: 1.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    footer {
+      margin-top: 2.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      max-width: 28rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Focus Guard</h1>
+    <p class="lead">
+      Guardian tools: rules, exceptions, enforcement, and activity — on the monitored PC.
+      Open the admin dashboard to sign in with your <strong>wizard admin password</strong>.
+    </p>
+    <!-- Edit href only if your guardian hostname differs -->
+    <a class="btn" href="https://guardian.focus-guard.org/admin">Open guardian dashboard</a>
+    <p class="sub">
+      If your organization uses <strong>Cloudflare Access</strong>, you may be asked to sign in with Google,
+      GitHub, or email <em>before</em> the Focus Guard login. That is expected.
+    </p>
+  </div>
+  <footer>
+    This page is a simple entry point. Policy and data stay on your home computer; remote access uses your Cloudflare tunnel.
+  </footer>
+</body>
+</html>
