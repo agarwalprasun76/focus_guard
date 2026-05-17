@@ -372,6 +372,7 @@ def _build_default_data() -> Dict[str, Any]:
         "domain_categories": {k: list(v) for k, v in _DEFAULT_DOMAIN_CATEGORIES.items()},
         "always_allowed_domains": list(_DEFAULT_ALWAYS_ALLOWED_DOMAINS),
         "always_allowed_categories": list(_DEFAULT_ALWAYS_ALLOWED_CATEGORIES),
+        "force_blocked_domains": [],
         "blocked_categories": list(_DEFAULT_BLOCKED_CATEGORIES),
         "system_whitelist": list(_DEFAULT_SYSTEM_WHITELIST),
         "per_domain_rules": dict(_DEFAULT_PER_DOMAIN_RULES),
@@ -788,6 +789,44 @@ class DomainConfigManager:
                 return True
             return False
 
+    def get_force_blocked_domains(self) -> Set[str]:
+        with self._lock:
+            return set(self._data.get("force_blocked_domains", []))
+
+    def add_force_blocked_domain(self, domain: str) -> None:
+        domain = domain.lower()
+        with self._lock:
+            lst = self._data.setdefault("force_blocked_domains", [])
+            if domain not in lst:
+                lst.append(domain)
+                self._mark_dirty_and_save()
+
+    def remove_force_blocked_domain(self, domain: str) -> bool:
+        domain = domain.lower()
+        with self._lock:
+            lst = self._data.get("force_blocked_domains", [])
+            if domain in lst:
+                lst.remove(domain)
+                self._mark_dirty_and_save()
+                return True
+            return False
+
+    def get_domain_allow_reason(self, domain: str) -> Optional[str]:
+        """Why a domain is allowed: ``whitelist``, ``category``, ``system``, or None."""
+        domain = domain.lower()
+        if find_matching_domain(domain, self.get_force_blocked_domains()):
+            return None
+        if find_matching_domain(domain, self.get_always_allowed_domains()):
+            return "whitelist"
+        if find_matching_domain(domain, self.get_system_whitelist()):
+            return "system"
+        cat = self.get_category_for_domain(domain)
+        if cat:
+            enum_cat = CATEGORY_TO_ENUM.get(cat, cat.upper())
+            if enum_cat in self.get_always_allowed_categories():
+                return "category"
+        return None
+
     # ------------------------------------------------------------------
     # Blocked / allowed categories
     # ------------------------------------------------------------------
@@ -886,6 +925,8 @@ class DomainConfigManager:
         Uses subdomain-aware matching.
         """
         domain = domain.lower()
+        if find_matching_domain(domain, self.get_force_blocked_domains()):
+            return "blocked"
         if find_matching_domain(domain, self.get_always_allowed_domains()):
             return "allowed"
         if find_matching_domain(domain, self.get_system_whitelist()):

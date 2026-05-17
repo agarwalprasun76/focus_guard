@@ -80,6 +80,16 @@ def update_classification_budget(
         raise translate_service_error(exc) from exc
 
 
+@router.get("/extension-status")
+def get_extension_status(
+    tab_server_client=Depends(get_tab_server_client),
+) -> dict[str, Any]:
+    try:
+        return _svc(tab_server_client).get_extension_status()
+    except SettingsServiceError as exc:
+        raise translate_service_error(exc) from exc
+
+
 # ── Domain management ──────────────────────────────────────────────
 
 @router.get("/domains")

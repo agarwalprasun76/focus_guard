@@ -491,7 +491,101 @@ Capture ideas, feature requests, and tangents during MVP execution without inter
 - Owner:
 - Status: parked
 
+### [FR-031]
+- Date: 2026-05-11
+- Requested by: field testing (admin Settings)
+- Title: Master Daily Distraction Budget appears saved but stays at 30 min
+- Priority: P0
+- Area: admin_ui / admin_gateway / tab_server / domain_config
+- Problem: Guardian changes Daily Distraction Budget; UI shows “Budget saved” but value remains 30 min on refresh. Root cause: UI sends `daily_seconds`; tab server `POST /api/domains/budgets/master` only applies `max_total_distraction_seconds` (success returned anyway).
+- Proposed idea: Map `daily_seconds` in gateway or accept both keys in tab server; fail if no fields updated; regression test.
+- Why not now: —
+- Earliest revisit day: next execution sprint
+- Owner:
+- Status: ready — **US-A1** in `POST_MVP_USER_STORIES.md`
+- Story: US-A1
+
+### [FR-032]
+- Date: 2026-05-11
+- Requested by: field testing (admin Settings → Domain Management)
+- Title: “Remove Allow” no-op for category-allowed domains (e.g. Education)
+- Priority: P1
+- Area: admin_ui / domain_config / blocking
+- Problem: Domains show Allowed because `always_allowed_categories` includes EDUCATION; Remove Allow only removes explicit `always_allowed_domains`, not category allowance — button looks broken.
+- Proposed idea: Distinguish category-allowed vs explicit whitelist in UI; support per-domain deny / recategorize / block override persisted in `DomainConfigManager`.
+- Why not now: Requires product rule for overriding category defaults.
+- Earliest revisit day: after FR-031
+- Owner:
+- Status: ready — **US-A2** in `POST_MVP_USER_STORIES.md`
+- Story: US-A2
+
+### [FR-033]
+- Date: 2026-05-11
+- Requested by: field testing (Protection level Warn → Block)
+- Title: Enforcement mode change does not block pages immediately (propagation / UX)
+- Priority: P1
+- Area: admin_ui / tab_server / extension / deployment
+- Problem: Protection set to Block; distracting pages still load. Unclear delay; extension sync only queued for Chrome/Edge; advisory vs enforcing semantics may confuse operators.
+- Proposed idea: Verify `sync_dnr` path; surface extension-not-connected in admin UI; document expected latency; smoke test enforcing mode.
+- Why not now: Needs repro + extension connected.
+- Earliest revisit day: after FR-031
+- Owner:
+- Status: ready — **US-A3** in `POST_MVP_USER_STORIES.md`
+- Story: US-A3
+
+### [FR-034]
+- Date: 2026-05-11
+- Requested by: product (activity + accountability)
+- Title: Re-integrate screenshot capture with activity monitor (training path later)
+- Priority: P2
+- Area: activity / tab_server / screenshot_service / privacy
+- Problem: `ScreenshotService` exists and runs on override flows; prior design captured on distracting activity via monitor — pathway not wired from `ActivityMonitor` / coordinator today.
+- Proposed idea: Phase 1 — config-gated hook from distraction signal → `ScreenshotService` + audit/activity DB metadata; Phase 2 — storage/export/image classification (deferred).
+- Why not now: Privacy/retention policy + opt-in default off.
+- Earliest revisit day: after admin settings bugs (FR-031–033)
+- Owner:
+- Status: ready — **US-B1** in `POST_MVP_USER_STORIES.md`
+- Story: US-B1
+
+### [FR-035]
+- Date: 2026-05-11
+- Requested by: product (distraction beyond browser)
+- Title: Flag non-browser distraction (PDFs, ebooks, local readers, offline fiction)
+- Priority: P2
+- Area: activity / reporting / classification
+- Problem: Downloaded fiction (PDF/images/Docs desktop) bypasses browser extension; child can read for hours undetected.
+- Proposed idea: Rules-first MVP using `ActivityMonitor` app + window title; optional tie to FR-034 screenshots; later OCR/ML.
+- Why not now: FP risk (school PDFs); needs spike.
+- Earliest revisit day: after FR-034 pathway
+- Owner:
+- Status: ready — **US-C1** in `POST_MVP_USER_STORIES.md`
+- Story: US-C1
+
+### [FR-036]
+- Date: 2026-05-11
+- Requested by: product (platform)
+- Title: macOS application + Safari browser support
+- Priority: P3
+- Area: install / macOS / extension / activity
+- Problem: Windows is MVP path; `MacOSActivityMonitor` is stub; Safari needs Web Extension packaging, not Chromium MV3 alone.
+- Proposed idea: Spike + delivery per **US-D1**; extends [FR-012].
+- Why not now: Large packaging/permissions surface.
+- Earliest revisit day: post-Windows stabilization
+- Owner:
+- Status: ready — **US-D1** in `POST_MVP_USER_STORIES.md`
+- Story: US-D1
+- Related: [FR-012]
+
+---
+
+## Executable backlog (stories)
+
+Full user stories with acceptance criteria, technical notes, and sprint order: **`docs/planning/mvp/POST_MVP_USER_STORIES.md`**.
+
+---
+
 ## Daily Review Checklist
 - [ ] Any new tangent captured here instead of being implemented immediately
 - [ ] Any parked item upgraded to P0 (explicit decision only)
 - [ ] Next day scope remains unchanged unless P0 blocker
+

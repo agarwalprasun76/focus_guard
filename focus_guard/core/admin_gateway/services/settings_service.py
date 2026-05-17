@@ -100,9 +100,28 @@ class SettingsService:
 
         return {**budgets, "distraction": distraction}
 
+    @staticmethod
+    def _normalize_master_budget_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        """Map admin UI ``daily_seconds`` to tab-server ``max_total_distraction_seconds``."""
+        body = dict(payload)
+        if "daily_seconds" in body and "max_total_distraction_seconds" not in body:
+            body["max_total_distraction_seconds"] = body.pop("daily_seconds")
+        elif "daily_seconds" in body:
+            body.pop("daily_seconds", None)
+        return body
+
     def update_master_budget(self, payload: dict[str, Any]) -> dict[str, Any]:
+        body = self._normalize_master_budget_payload(payload)
+        if "max_total_distraction_seconds" not in body and not any(
+            k in body for k in ("warning_threshold_percent", "categories_to_track")
+        ):
+            raise SettingsServiceError(
+                "VALIDATION_ERROR",
+                "daily_seconds or max_total_distraction_seconds is required",
+                400,
+            )
         try:
-            return self._ts.post_json("/api/domains/budgets/master", payload)
+            return self._ts.post_json("/api/domains/budgets/master", body)
         except TabServerUnavailableError as exc:
             raise SettingsServiceError("DEVICE_OFFLINE", str(exc), 409) from exc
         except TabServerRequestError as exc:
@@ -119,6 +138,15 @@ class SettingsService:
             raise SettingsServiceError(code, exc.message, exc.status_code) from exc
 
     # ── Domain management ──────────────────────────────────────────
+
+    def get_extension_status(self) -> dict[str, Any]:
+        """Tab-server extension heartbeats (Chrome/Edge poll ~every 2s)."""
+        try:
+            return self._ts.get_json("/api/status")
+        except TabServerUnavailableError as exc:
+            raise SettingsServiceError("DEVICE_OFFLINE", str(exc), 409) from exc
+        except TabServerRequestError as exc:
+            raise SettingsServiceError("UPSTREAM_ERROR", exc.message, 502) from exc
 
     def get_domains_overview(self) -> dict[str, Any]:
         try:

@@ -64,7 +64,51 @@ def step_active_override(request: BlockingRequest, ctx: BlockingContext) -> Opti
 
 
 # ---------------------------------------------------------------------------
-# Step 2: always_allowed_domain
+# Step 2: force_blocked_domain (guardian override of category allow)
+# ---------------------------------------------------------------------------
+
+def step_force_blocked_domain(request: BlockingRequest, ctx: BlockingContext) -> Optional[BlockingStepResult]:
+    """Domain on guardian force-block list. Terminal block (overrides category allow)."""
+    from focus_guard.core.domain.domain_config_manager import find_matching_domain
+
+    mgr = _get_config_manager()
+    if not mgr:
+        return None
+    force_blocked = mgr.get_force_blocked_domains()
+    if not find_matching_domain(request.domain, force_blocked):
+        return None
+    logger.debug("Domain %s is force-blocked by guardian", request.domain)
+    blocker = _blocker(request, ctx)
+    cat = (mgr.get_category_for_domain(request.domain) or "ENTERTAINMENT").upper()
+    budget = blocker._get_budget_status(request.domain, cat, "DISTRACTION") if blocker else None
+    return BlockingStepResult(
+        terminal=True,
+        should_block=True,
+        reason=f"Domain {request.domain} blocked by guardian",
+        step_name="force_blocked_domain",
+        details={
+            "rule": BlockingRule(
+                domain=request.domain,
+                reason=f"Domain {request.domain} blocked by guardian",
+                category=cat,
+            ),
+            "classification": {
+                "category": cat,
+                "usefulness": "DISTRACTION",
+                "confidence": 1.0,
+                "reason": "Guardian force-blocked this domain",
+                "classifier_used": "guardian_override",
+                "decision_source": "override",
+                "block_basis": "force_blocked_domain",
+                "is_distracting": True,
+            },
+            "budget_status": budget,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Step 3: always_allowed_domain
 # ---------------------------------------------------------------------------
 
 def step_always_allowed_domain(request: BlockingRequest, ctx: BlockingContext) -> Optional[BlockingStepResult]:
@@ -406,7 +450,15 @@ def step_policy_from_classification(request: BlockingRequest, ctx: BlockingConte
         should_block = True
         block_reason = block_reason or f"Content classified as distracting ({result.category})"
         block_basis = "distracting_content"
-    if result.category in ALWAYS_ALLOWED_CATEGORIES:
+    mgr = _get_config_manager()
+    if mgr:
+        from focus_guard.core.domain.domain_config_manager import find_matching_domain
+
+        if find_matching_domain(request.domain, mgr.get_force_blocked_domains()):
+            should_block = True
+            block_reason = f"Domain {request.domain} blocked by guardian"
+            block_basis = "force_blocked_domain"
+    if not should_block and result.category in ALWAYS_ALLOWED_CATEGORIES:
         should_block = False
         block_reason = ""
         block_basis = "always_allowed_category"
@@ -456,6 +508,7 @@ def step_policy_from_classification(request: BlockingRequest, ctx: BlockingConte
 
 STEP_ORDER = [
     ("active_override", step_active_override),
+    ("force_blocked_domain", step_force_blocked_domain),
     ("always_allowed_domain", step_always_allowed_domain),
     ("search_context_block", step_search_context_block),
     ("immediate_domain_block", step_immediate_domain_block),

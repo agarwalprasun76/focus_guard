@@ -74,6 +74,28 @@ def test_get_enforcement_mode_offline_mapping():
     assert exc.value.status_code == 409
 
 
+def test_update_master_budget_maps_daily_seconds():
+    captured: dict = {}
+
+    class _CapturingClient(_FakeTabServerClient):
+        def post_json(self, path, payload):
+            captured["path"] = path
+            captured["payload"] = payload
+            return {"success": True}
+
+    service = SettingsService(_CapturingClient())
+    service.update_master_budget({"daily_seconds": 900})
+    assert captured["path"] == "/api/domains/budgets/master"
+    assert captured["payload"] == {"max_total_distraction_seconds": 900}
+
+
+def test_update_master_budget_requires_a_field():
+    service = SettingsService(_FakeTabServerClient())
+    with pytest.raises(SettingsServiceError) as exc:
+        service.update_master_budget({})
+    assert exc.value.code == "VALIDATION_ERROR"
+
+
 def test_set_enforcement_mode_maps_403_to_validation_error():
     service = SettingsService(
         _FakeTabServerClient(post_exc=TabServerRequestError(status_code=403, message="password required"))

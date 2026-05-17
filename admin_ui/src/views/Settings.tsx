@@ -19,10 +19,17 @@ function formatMinutes(seconds: number | null | undefined): string {
 }
 
 function deriveStatus(d: DomainEntry): "allowed" | "blocked" | "budgeted" | "tracked" {
+  if (d.force_blocked || d.blocked || d.status === "blocked") return "blocked";
   if (d.whitelisted || d.status === "allowed") return "allowed";
-  if (d.blocked || d.status === "blocked") return "blocked";
   if ((d.budget_seconds != null && d.budget_seconds > 0) || d.status === "budgeted") return "budgeted";
   return "tracked";
+}
+
+function allowReasonLabel(reason?: string | null): string | null {
+  if (reason === "category") return "category default";
+  if (reason === "whitelist") return "explicit allow";
+  if (reason === "system") return "system";
+  return null;
 }
 
 const PROTECTION_LEVELS: {
@@ -74,15 +81,25 @@ function EnforcementSection() {
     retry: 2,
   });
 
+  const extensionQ = useQuery({
+    queryKey: ["settings-extension-status"],
+    queryFn: settingsApi.getExtensionStatus,
+    retry: 1,
+    refetchInterval: 10_000,
+  });
+
   const mutation = useMutation({
     mutationFn: settingsApi.setEnforcement,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings-enforcement"] });
+      queryClient.invalidateQueries({ queryKey: ["settings-extension-status"] });
       queryClient.invalidateQueries({ queryKey: ["devices"] });
       setShowPwField(false);
       setPassword("");
       setPendingMode(null);
-      setSuccessMsg("Protection level updated.");
+      setSuccessMsg(
+        "Protection level updated. Chrome/Edge extensions should apply within ~30 seconds (they poll every few seconds).",
+      );
     },
     onError: (error) => {
       if (
@@ -96,6 +113,13 @@ function EnforcementSection() {
   });
 
   const currentMode = enforcementQ.data?.enforcement_mode ?? "enforcing";
+
+  const connectedBrowsers =
+    extensionQ.data?.connected_browsers?.filter((b) => b.connected).map((b) => b.browser) ?? [];
+  const extensionWarning =
+    extensionQ.isSuccess && connectedBrowsers.length === 0
+      ? "No Chrome or Edge extension is connected. Block mode will not take effect until the extension is installed and paired with this PC."
+      : null;
 
   function handleSelect(mode: EnforcementMode) {
     if (mode === currentMode) return;
@@ -129,6 +153,17 @@ function EnforcementSection() {
           app; extensions pick it up within a few seconds.
         </p>
       </div>
+
+      {extensionWarning && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {extensionWarning}
+        </p>
+      )}
+      {extensionQ.isSuccess && connectedBrowsers.length > 0 && (
+        <p className="text-xs text-gray-500">
+          Extension connected: {connectedBrowsers.join(", ")}. Changes sync within a few seconds.
+        </p>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         {PROTECTION_LEVELS.map((lvl) => {
@@ -598,6 +633,7 @@ function DomainRow({
           : "bg-slate-100 text-slate-600";
 
   const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+  const reasonHint = status === "allowed" ? allowReasonLabel(entry.allow_reason) : null;
 
   return (
     <tr className="hover:bg-slate-50/60">
@@ -621,6 +657,14 @@ function DomainRow({
         <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusBadge}`}>
           {statusLabel}
         </span>
+        {reasonHint && (
+          <span className="mt-0.5 block text-[10px] text-gray-400" title="Why this domain is allowed">
+            {reasonHint}
+          </span>
+        )}
+        {entry.force_blocked && (
+          <span className="mt-0.5 block text-[10px] text-red-500">Guardian blocked</span>
+        )}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
         {editingBudget ? (
@@ -681,7 +725,13 @@ function DomainRow({
               : "border border-emerald-200 text-emerald-600 hover:bg-emerald-50"
           } disabled:opacity-40`}
         >
-          {status === "allowed" ? "Remove Allow" : "Always Allow"}
+          {status === "allowed"
+            ? entry.allow_reason === "category"
+              ? "Block domain"
+              : "Remove Allow"
+            : entry.force_blocked
+              ? "Allow again"
+              : "Always Allow"}
         </button>
       </td>
     </tr>

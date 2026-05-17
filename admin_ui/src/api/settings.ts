@@ -53,6 +53,22 @@ export type DomainEntry = {
   visit_count?: number;
   whitelisted?: boolean;
   blocked?: boolean;
+  force_blocked?: boolean;
+  /** Why allowed: whitelist | category | system */
+  allow_reason?: string | null;
+};
+
+export type ExtensionBrowserStatus = {
+  browser: string;
+  connected: boolean;
+  last_heartbeat?: number;
+  extension_version?: string;
+};
+
+export type ExtensionStatusResponse = {
+  connected_browsers?: ExtensionBrowserStatus[];
+  total_tabs?: number;
+  timestamp?: number;
 };
 
 export type DomainsOverviewResponse = {
@@ -79,6 +95,10 @@ export type SetDomainBudgetInput = {
 
 export function getEnforcement(): Promise<EnforcementResponse> {
   return requestJson<EnforcementResponse>("/settings/enforcement");
+}
+
+export function getExtensionStatus(): Promise<ExtensionStatusResponse> {
+  return requestJson<ExtensionStatusResponse>("/settings/extension-status");
 }
 
 export function setEnforcement(input: SetEnforcementInput): Promise<SetEnforcementResponse> {

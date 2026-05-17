@@ -1084,9 +1084,23 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
 
             # Extensions poll GET /api/command ~every 2s; refresh DNR + invalidate caches immediately
             try:
+                from .api_models import BrowserFamily
+                from .storage import get_tab_storage
+
                 sync_cmd: Dict[str, Any] = {"action": "sync_dnr", "reason": "enforcement_mode_changed"}
-                self.context.queue_command("Google Chrome", sync_cmd)
-                self.context.queue_command("Microsoft Edge", sync_cmd)
+                browser_labels = {
+                    BrowserFamily.CHROME: "Google Chrome",
+                    BrowserFamily.EDGE: "Microsoft Edge",
+                }
+                connected = get_tab_storage().get_connected_browsers()
+                targets = [
+                    browser_labels.get(bf, bf.value if hasattr(bf, "value") else str(bf))
+                    for bf in connected
+                ]
+                if not targets:
+                    targets = ["Google Chrome", "Microsoft Edge"]
+                for browser_name in targets:
+                    self.context.queue_command(browser_name, sync_cmd)
             except Exception as exc:
                 logger.debug("Could not queue sync_dnr for extensions: %s", exc)
             
@@ -1293,6 +1307,7 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
 
             all_domains = mgr.get_all_known_domains()
             always_allowed = mgr.get_always_allowed_domains()
+            force_blocked = mgr.get_force_blocked_domains()
             per_rules = mgr.get_per_domain_rules()
 
             # Enrich with today's usage from tracker
@@ -1313,7 +1328,11 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
                 categories_set.add(cat)
 
                 # Frontend-expected fields
-                entry["whitelisted"] = d in always_allowed
+                from focus_guard.core.domain.domain_config_manager import find_matching_domain
+
+                entry["whitelisted"] = find_matching_domain(d, always_allowed) is not None
+                entry["force_blocked"] = find_matching_domain(d, force_blocked) is not None
+                entry["allow_reason"] = mgr.get_domain_allow_reason(d)
                 entry["blocked"] = entry.get("status") == "blocked"
 
                 # Budget: extract max_cumulative_time_seconds from per-domain rule
@@ -1417,14 +1436,29 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
 
             if action == "add":
                 mgr.add_always_allowed_domain(domain)
+                mgr.remove_force_blocked_domain(domain)
+                effect = "whitelist_add"
             else:
-                mgr.remove_always_allowed_domain(domain)
+                from focus_guard.core.domain.domain_config_manager import find_matching_domain
+
+                if find_matching_domain(domain, mgr.get_always_allowed_domains()):
+                    mgr.remove_always_allowed_domain(domain)
+                    effect = "whitelist_remove"
+                elif mgr.get_domain_allow_reason(domain) == "category":
+                    mgr.add_force_blocked_domain(domain)
+                    effect = "force_block"
+                elif mgr.remove_force_blocked_domain(domain):
+                    effect = "force_block_remove"
+                else:
+                    effect = "noop"
 
             self._set_headers(HTTPStatus.OK)
             self.wfile.write(json.dumps({
                 "success": True,
                 "domain": domain,
                 "action": action,
+                "effect": effect,
+                "status": mgr.get_domain_status(domain),
             }).encode("utf-8"))
         except Exception as exc:
             logger.exception("Failed to update whitelist: %s", exc)
@@ -1524,6 +1558,9 @@ class TabServerRequestHandler(BaseHTTPRequestHandler):
 
             data = self._read_json_body()
             current = mgr.get_master_budget()
+            # Admin gateway / UI may send daily_seconds; accept both keys.
+            if "daily_seconds" in data and "max_total_distraction_seconds" not in data:
+                data["max_total_distraction_seconds"] = data["daily_seconds"]
             if "max_total_distraction_seconds" in data:
                 current["max_total_distraction_seconds"] = data["max_total_distraction_seconds"]
             if "warning_threshold_percent" in data:
